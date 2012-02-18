@@ -19,4 +19,4 @@ class ConcatJs(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([
     ("/client/delphi.js", ConcatJs),
-    ], debug=True)
+    ], debug=util.in_development)

@@ -37,7 +37,7 @@ def submit_judgment(operator_id, session_id, question_id, judgment, timecost):
     "question_id": question_id,
     "time_cost_ms": timecost,
     "timestamp": timestamp,
-    "answer": json.dumps(judgment)
+    "answer": judgment
   };
   return raja.post("/questions/" + question_id + "/answer", params)
 

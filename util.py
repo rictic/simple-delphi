@@ -2,6 +2,7 @@ import urllib
 import urllib2
 import json
 import logging
+import os
 
 class Requester(object):
   def __init__(self, base_url):
@@ -16,10 +17,12 @@ class Requester(object):
 
   def post(self, path, params):
     url = self.base_url + path
+    encoded_data = urllib.urlencode(params)
     logging.info("POSTing form-encoded data to URL: %s", url)
+    logging.info("With data:\n%s", encoded_data)
     request = urllib2.Request(
         url,
-        data=urllib.urlencode(params),
+        data=encoded_data,
         headers={"Content-Type": "application/x-www-form-encoded"})
     return json.load(urllib2.urlopen(request, timeout=30)).get("result")
 
@@ -32,3 +35,4 @@ class Requester(object):
         headers={"Content-Type": "application/json"})
     return json.load(urllib2.urlopen(request, timeout=30))
 
+in_development = os.environ.get('SERVER_SOFTWARE', '').startswith('Dev')
