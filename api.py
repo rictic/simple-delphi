@@ -9,6 +9,7 @@ from google.appengine.api import users
 
 def json_responder(wrapped):
   def wrapper(self, *args, **kwargs):
+    #TODO(rictic): HTTP error handling
     result = wrapped(self, *args, **kwargs)
     self.response.headers["Content-Type"] = "application/json"
     json.dump({"result": result}, self.response.out, indent=2)
