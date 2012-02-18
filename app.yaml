@@ -5,6 +5,8 @@ api_version: 1
 threadsafe: true
 
 handlers:
+- url: /
+  script: api.app
 - url: /apis/.*
   script: api.app
 - url: /client/delphi.js

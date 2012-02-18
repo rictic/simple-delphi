@@ -74,6 +74,10 @@ class Signout(Base):
     self.response.status = 301
     self.response.headers["Location"] = users.create_logout_url("/")
 
+class RedirectToIndex(Base):
+  def get(self):
+    self.response.status = 301
+    self.response.headers["Location"] = "/index.html"
 
 class Echo(Base):
   @json_responder
@@ -94,4 +98,5 @@ app = webapp2.WSGIApplication([
     ("/apis/submit_judgment", SubmitJudgment),
     ("/apis/signout", Signout),
     ("/apis/echo", Echo),
+    ("/", RedirectToIndex)
     ], debug=util.in_development)
