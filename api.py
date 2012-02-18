@@ -62,7 +62,7 @@ class SubmitJudgment(Base):
 
 
 
-class Signout(webapp2.RequestHandler):
+class Signout(Base):
   def get(self):
     self.response.status = 301
     self.response.headers["Location"] = users.create_logout_url("/")

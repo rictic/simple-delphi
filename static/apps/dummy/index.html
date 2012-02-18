@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+    <link href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/smoothness/jquery-ui.css" rel="stylesheet" type="text/css">
+
+    <style>
+      body {
+        padding: 1em;
+      }
+      pre {
+        margin: 1em;
+        padding: 1em;
+        border: 1px solid #ccc;
+        background-color: #fff;
+        border-radius: 1em;
+        display: none;
+      }
+    </style>
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+      var question = {
+        "blah" : "blah"
+      };
+
+      var configs = {
+        "foo" : "bar"
+      };
+
+      function acceptConfiguration(configs) {
+        $("#configs").text(JSON.stringify(configs,null,2)).show();
+      }
+
+      function main(question) {
+        $("#question").text(JSON.stringify(question,null,2)).show();
+      }
+
+      $(function() {
+        $("button").click(function() {
+          var judgment = $(this).attr('judgment');
+          if (judgment) {
+            Delphi.submitJudgment({
+              "judgment" : judgment
+            });
+          }
+        }).button();
+      });
+    </script>
+
+    <script src="/client/delphi.js" type="text/javascript"></script>
+
+  </head>
+  <body>
+    <h1>Question</h1>
+    <pre id="question"></pre>
+    <h1>Params</h1>
+    <pre id="configs"></pre>
+    <div><button judgment='yes'>Yes?</button></div>
+  </body>
+</html>
