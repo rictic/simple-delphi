@@ -1,0 +1,385 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Delphi</title>
+  <link href="css/freebase.mf.css" rel="stylesheet">
+  <link href="css/freebase.ui.mf.css" rel="stylesheet">
+  <link href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/ui-lightness/jquery-ui.css" rel="stylesheet">
+  <link href="css/delphi.css" rel="stylesheet">
+
+</head>
+<body>
+
+  <div class="logged_in invisible">
+    <div id="activity" class="message hidden"><span class="text"></span> <img src="/images/spinner.gif"></div>
+
+    <iframe id="app" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
+
+    <div id="end" class="message hidden">There are no more questions for you at this time</div>
+
+    <div id="dialog_message" class="hidden"></div>
+  </div>
+
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" type="text/javascript"></script>
+  <script src="lib/json2.js" type="text/javascript"></script>
+  <script src="lib/postmessage.js" type="text/javascript"></script>
+  <script>
+    var log_enabled = true;
+
+    var push_question_time = 0;
+
+    var question_count = 0;
+    var forceful_reload_count = 100;
+
+    var iframe_hight, iframe_width;
+    var iframe_padding = 5;
+    var iframe_border = 1;
+
+    function log(o) {
+      if (typeof console !== "undefined" && log_enabled) {
+        console.log(o);
+      }
+    }
+
+    function now() {
+      return (new Date()).getTime();
+    }
+
+    function show_activity(msg) {
+      var a = $("#activity");
+      a.find(".text").html(msg);
+      a.show();
+    }
+
+    function hide_activity() {
+      $("#activity").hide();
+    }
+
+    function show_app() {
+      $("#app").show();
+    }
+
+    function hide_app() {
+      $("#app").hide();
+    }
+
+    function end() {
+      hide_app();
+      $("#end").show();
+    }
+
+    function resize() {
+      var frame = $("#app");
+
+      var h = $(document).height() - $("#header").outerHeight(true) - $("#extra").outerHeight(true) - $("#footer").outerHeight(true) - (2 * iframe_padding) - (2 * iframe_border);
+      if (!isNaN(h) && (h > 0) && (h !== iframe_hight)) {
+        frame.height(h);
+        iframe_height = h;
+      }
+
+      var w = $('body').outerWidth(true) - (2 * iframe_padding) - (2 * iframe_border);
+      if (!isNaN(w) && (w > 0) && (w !== iframe_width)) {
+        frame.width(w);
+        iframe_width = w;
+      }
+    }
+
+    function push_question(app,question,params) {
+      push_question_time = now();
+      var app_frame = $("#app");
+      var current_app_url = app_frame.attr("src");
+
+      var submit = function() {
+        log("submitted question to the app");
+        pm({
+          target: window.frames["app"],
+          type: "preloadQuestion",
+          data: question
+        });
+        pm({
+          target: window.frames["app"],
+          type: "question",
+          data: question
+        });
+        question_count++;
+      }
+
+      // Here we act defensively and force the delphi app
+      // embedded in the iframe to be reloaded every once in a while
+      // to make sure that if there are any leaks or degradations
+      // it won't generate weird behavior that would be hard to debug later
+      if ((current_app_url != app.url) || (question_count % forceful_reload_count == 0)) {
+        log("loading app from: " + app.url);
+        question_count = 0;
+        $("#app").attr("src", app.url);
+        pm.bind("ready", function() {
+          log("app is ready, let's roll");
+          pm({
+            target: window.frames["app"],
+            type: "acceptConfiguration",
+            data: params
+          });
+          submit();
+        });
+      } else {
+        submit();
+      }
+    }
+
+    var group_to_session = {};
+    function get_session_for_group(group, continuation) {
+      if (!(group in group_to_session)) {
+        $.getJSON("/apis/start_session?group=" + group).success(function(data) {
+          if ("result" in data && "session_id" in data.result) {
+            group_to_session[group] = data.result.session_id;
+            continuation(group_to_session[group]);
+          } else {
+            alert("could not obtain session: " + JSON.stringify(data,null,2));
+          }
+        }).error(function(data) {
+          alert("error getting session: " + JSON.stringify(data,null,2));
+        });
+      } else {
+        continuation(group_to_session[group]);
+      }
+    }
+
+    var question_to_session = {};
+    function get_question(session_id, continuation, message) {
+      show_activity(message || "Loading question...");
+      $.getJSON("/apis/get_question", {
+        "session_id" : session_id
+      }).success(function(data) {
+        if ("result" in data && "question_batch" in data.result) {
+          var questions = data.result.question_batch;
+          if (questions.length === 0) {
+            continuation(null);
+            return;
+          }
+
+          var question = questions[0];
+          question_to_session[question['question_id']] = session_id;
+          continuation(question);
+        } else {
+          alert("could not obtain question: " + JSON.stringify(data,null,2));
+        }
+      }).error(function(data) {
+        if (data.status == 408) {
+          continuation(null);
+        } else {
+          alert("error getting question: " + JSON.stringify(data,null,2));
+        }
+      });
+    }
+
+    function get_app(question) {
+      //TOOD(stefanom): these need to call out refinery with the task_id to get the app associated with this question
+      return {
+        "name" : "dummy",
+        "url" : "/dummy/"
+      };
+    }
+
+    function get_params(question) {
+      //TOOD(stefanom): these need to call out refinery with the task_id to get the params for the app
+      //                associated with this question
+      return {
+        "proxied" : true
+      };
+    }
+
+    var groups_good_until = 0;
+    var groups_cache;
+    function get_groups(continuation) {
+      show_activity("Obtaining tasks...");
+      var GROUPS_CACHE_TIME = 1000 * 60 * 5; // 5 minutes
+      if (now() > groups_good_until) {
+        fetch_groups(function(groups) {
+          //skip caching of empty groups at this level to get work faster
+          //once it's assigned; let the other layers cache this case if needed
+          if (groups.length === 0) {
+            continuation(groups);
+            return;
+          }
+          groups_cache = groups;
+          groups_good_until = now() + GROUPS_CACHE_TIME;
+          continuation(groups_cache);
+        });
+      } else {
+        continuation(groups_cache);
+      }
+
+      function fetch_groups(success) {
+        $.getJSON("/apis/get_groups").success(function(data) {
+          if (!("result" in data) || !$.isArray(data.result)) {
+            alert("error getting groups, got invalid response");
+            return;
+          }
+          success(data.result);
+        });
+      }
+    }
+
+    /**
+     * Given a list of groups, returns one of them to fetch questions for.
+     *
+     * Groups earlier in the list are given priority. Only if we haven't gotten
+     * a question from a group for a while despite trying relatively recently do
+     * we try the next group.
+     */
+    var groups_metadata = {};
+    var tie_breaker = 0;
+    function choose_group(groups) {
+      for (var i = 0; i < groups.length; i++) {
+        var group = groups[i % groups.length];
+        var gmeta = groups_metadata[group];
+        if (gmeta === undefined) {
+          gmeta = {
+            "unsuccessful_streak": 0
+          }
+          groups_metadata[group] = gmeta;
+        }
+
+        //if we haven't tried to request this group in a long time, give it a shot
+        if (gmeta.last_requested_at && now() - gmeta.last_requested_at > (1000 * 60 * 5)) {
+          gmeta.last_requested_at = now();
+          return group;
+        }
+
+        //if we've tried too many times, move on
+        if (gmeta.unsuccessful_streak > 15) {
+          continue;
+        }
+        //if it's beeen too long without a success, move on
+        if (gmeta.began_unsuccessful_streak_at
+         && now() - gmeta.began_unsuccessful_streak_at > (1000 * 20)) {
+          continue;
+        }
+
+        tie_breaker = 0;
+        gmeta.last_requested_at = now();
+        return group;
+      }
+
+      log_no_work_available();
+      //At this point raja will keep trying to populate these these sessions even
+      //when we're not actively querying, so just cycle between them until one returns
+      var group = groups[tie_breaker % groups.length];
+      tie_breaker++;
+      gmeta.last_requested_at = now();
+      return group;
+    }
+
+    var no_work_available = false;
+    function log_no_question_received_for_group(group) {
+      if (!no_work_available) {
+        show_activity("Still working...");
+      }
+      var gmeta = groups_metadata[group];
+      gmeta.unsuccessful_streak++;
+      gmeta.began_unsuccessful_streak_at = undefined;
+    }
+
+    function log_question_received_for_group(group) {
+      hide_activity();
+      var gmeta = groups_metadata[group];
+      gmeta.unsuccessful_streak = 0;
+      if (gmeta.began_unsuccessful_streak_at === undefined) {
+        gmeta.began_unsuccessful_streak_at = now();
+      }
+    }
+
+    function log_no_work_available() {
+      no_work_available = true;
+      show_activity("Looks like there's no more questions in the tasks you've been assigned." +
+                    " (This page will keep looking in case you're reassigned, or more work comes in though)");
+    }
+
+    function on_context_switch() {
+      //TODO: inform the contributor about the context switch and give them the info they need
+    }
+
+    var prev_group = null;
+    function next_question() {
+      get_groups(function(groups) {
+        if (groups.length === 0) {
+          show_activity("You're not assigned to any tasks right now.");
+          return;
+        }
+
+        var group = choose_group(groups);
+        get_session_for_group(group, function(session_id) {
+          get_question(session_id, function(question) {
+            if (question === null) {
+              log_no_question_received_for_group(group);
+              setTimeout(next_question, 1000 * 3);
+              return;
+            }
+
+            log_question_received_for_group(group, question);
+            if (group !== prev_group) {
+              on_context_switch();
+            }
+            show_app();
+            resize();
+            var app = get_app(question);
+            var params = get_params(question);
+            push_question(app,question,params);
+          });
+        });
+      });
+    }
+
+    function received_judgment(data) {
+      var judgment = data.judgment;
+      var question = data.question;
+
+      log("received judgment");
+      log(judgment);
+      hide_app();
+      show_activity("Submitting judgment...");
+      if (!("extra" in judgment)) {
+        judgment.extra = {};
+      }
+      var d = $(document);
+      judgment.extra.page_width = d.width();
+      judgment.extra.page_height = d.height();
+
+      // TODO(SM) update URL for permalinking
+
+      var question_id = question.question_id;
+      var session_id = question_to_session[question_id]
+
+      $.post("/apis/submit_judgment",{
+        "session_id" : session_id,
+        "question_id" : question_id,
+        "timecost" : now() - push_question_time,
+        "judgment" : JSON.stringify(judgment)
+      }).success(function(data) {
+        next_question();
+      }).error(function(data) {
+        alert("error submitting judgment: " + JSON.stringify(data));
+      });
+    }
+
+    function keep_sessions_alive() {
+      for (var group in group_to_session) {
+        var session_id = group_to_session[group];
+        //TODO(rictic): handle session expired message from this
+        $.post("/apis/session_status", {session_id: session_id});
+      }
+    }
+
+    $(function() {
+      setInterval(keep_sessions_alive, 1000 * 15);
+      pm.bind("judgment", received_judgment);
+      $(window).resize(resize);
+      next_question();
+    })
+
+  </script>
+
+</body>
+</html>
+

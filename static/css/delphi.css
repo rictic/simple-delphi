@@ -1,0 +1,66 @@
+/** styles/defaults.css**/
+html {
+  color: #333;
+  font-size: 120%;
+}
+p {
+  margin: 0.8em 0em;
+}
+.hidden {
+  display: none;
+}
+.left {
+  text-align: left;
+}
+.center {
+  text-align: center;
+}
+.right {
+  text-align: right;
+}
+.rounded {
+  -moz-border-radius: 1em;
+  -webkit-border-radius: 1em;
+}
+.decoration {
+  font-size: 70%;
+  position: relative;
+  bottom: 0.7em;
+  color: #888;
+}
+.activity {
+  color: #888;
+  font-size: 140%;
+}
+.activity img {
+  vertical-align: middle;
+}
+/** styles/freebase_corrections.css**/
+td {
+  vertical-align: top;
+}
+#content {
+  padding: 5px;
+}
+#footer {
+  position: fixed;
+  width: 100%;
+  bottom: 0;
+  margin-top: 0;
+}
+#signedout a, #nav-username a, .nav-user-controls {
+  display: block;
+  font-weight: bold;
+  padding: 0 20px;
+  height: 40px;
+  line-height: 3.7;
+  overflow: hidden;
+}
+#fb-logo {
+  margin-left: 10px;
+}
+#copyright img {
+  top: 9px;
+  padding: 0 5px 0 4px;
+}
+/** styles/delphi.css**/

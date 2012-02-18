@@ -1,0 +1,12 @@
+application: freebase-delphi
+version: 1
+runtime: python27
+api_version: 1
+threadsafe: true
+
+handlers:
+- url: /apis/.*
+  script: api.app
+- url: /
+  static_dir: static/
+  login: required
