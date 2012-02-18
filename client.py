@@ -1,4 +1,5 @@
 import webapp2
+import util
 
 js_files = [
     "client/jquery.js",
