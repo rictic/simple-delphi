@@ -31,6 +31,13 @@ class GetGroups(Base):
     return refinery.get_groups(users.get_current_user())
 
 
+class GetTaskDetails(Base):
+  @json_responder
+  def get(self):
+    task, = self.require_params(["unguessable_id"])
+    return refinery.get_task_details(task)
+
+
 class GetQuestion(Base):
   @json_responder
   def get(self):
@@ -87,6 +94,7 @@ class Echo(Base):
 
 app = webapp2.WSGIApplication([
     ("/apis/get_groups", GetGroups),
+    ("/apis/get_task_details", GetTaskDetails),
     ("/apis/get_question", GetQuestion),
     ("/apis/session_status", SessionStatus),
     ("/apis/start_session", StartSession),

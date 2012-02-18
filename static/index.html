@@ -173,53 +173,72 @@
       });
     }
 
-    function get_app(question) {
-      //TOOD(stefanom): these need to call out refinery with the task_id to get the app associated with this question
-      return {
-        "name" : "dummy",
-        "url" : "/apps/dummy/index.html"
-      };
+    //NOTE: only handles callback functions that take either 0 or 1 arg
+    function cache_function(ttl, f) {
+      function cached() {
+        var args = Array.prototype.slice.call(arguments);
+        var continuation = args.pop();
+        var key = "";
+        if (args.length > 1 || (args.length === 1 && typeof args[0] !== "string")) {
+          throw new Error("unable to cache a function of >1 arg or nonstring args");
+        } else if (args.length === 1) {
+          key = args[0];
+        }
+        var cv = cached.cache[key];
+        if (!cv || now() > cv.valid_until) {
+          f.apply(null, args.concat([
+            function(result) {
+              cached.cache[key] = {
+                valid_until: now() + ttl,
+                value: result
+              };
+              continuation(result);
+            }
+          ]));
+        } else {
+          continuation(cv.value);
+        }
+      }
+      cached.cache = {};
+      return cached;
     }
 
-    function get_params(question) {
-      //TOOD(stefanom): these need to call out refinery with the task_id to get the params for the app
-      //                associated with this question
-      return {
-        "proxied" : true
-      };
-    }
-
-    var groups_good_until = 0;
-    var groups_cache;
-    function get_groups(continuation) {
-      show_activity("Obtaining tasks...");
-      var GROUPS_CACHE_TIME = 1000 * 60 * 5; // 5 minutes
-      if (now() > groups_good_until) {
-        fetch_groups(function(groups) {
-          //skip caching of empty groups at this level to get work faster
-          //once it's assigned; let the other layers cache this case if needed
-          if (groups.length === 0) {
-            continuation(groups);
+    var get_group_details = cache_function(1000 * 60 * 5,
+      function actual_get_group_details(group, callback) {
+        $.getJSON("/apis/get_task_details", {unguessable_id: group}).success(function(data) {
+          if (!("result" in data)) {
+            alert("error getting task details, got invalid response");
             return;
           }
-          groups_cache = groups;
-          groups_good_until = now() + GROUPS_CACHE_TIME;
-          continuation(groups_cache);
+          var result = data.result;
+          if (!result.configurations) {
+            result.configurations = {};
+          }
+          result.configurations.proxied = true
+          if (typeof result.app === "string") {
+            console.error("app is just a string...");
+            result.app = {name: result.app};
+          }
+          if (!result.app.url) {
+            console.error("App given by refinery doesn't have a url, filling in dummy...");
+            result.app.url = "/apps/dummy/index.html"
+          }
+          callback(data.result);
         });
-      } else {
-        continuation(groups_cache);
       }
+    )
 
-      function fetch_groups(success) {
+    var get_groups = cache_function(1000 * 60 * 5,
+      function fetch_groups(callback) {
         $.getJSON("/apis/get_groups").success(function(data) {
           if (!("result" in data) || !$.isArray(data.result)) {
             alert("error getting groups, got invalid response");
             return;
           }
-          success(data.result);
+          callback(data.result);
         });
       }
-    }
+    );
 
     /**
      * Given a list of groups, returns one of them to fetch questions for.
@@ -323,9 +342,10 @@
             }
             show_app();
             resize();
-            var app = get_app(question);
-            var params = get_params(question);
-            push_question(app,question,params);
+            get_group_details(group, function(task_details) {
+              console.log(task_details);
+              push_question(task_details.app, question, task_details.configurations);
+            });
           });
         });
       });
