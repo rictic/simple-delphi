@@ -1,0 +1,42 @@
+<acre:block def="styles()">
+</acre:block>
+
+<acre:block def="scripts()">
+</acre:block>
+
+<acre:block def="content(topic_id, params)">
+  <acre:script>
+    var options = { 'mode' : 'standard' };
+    if ("as_of_time" in params) {
+      options["as_of_time"] = params["as_of_time"];
+    }
+    var topic = acre.freebase.get_topic(topic_id, options).result;
+  </acre:script>
+
+  <acre:block if="topic">
+    <div class="thumbnail" acre:if="topic.thumbnail"><img src="${topic.thumbnail}"></div>
+    <h1><a href="http://www.freebase.com/view${topic.id}" target="_new">${topic.text}</a></h1>
+    <div class="types"><span acre:for="i,t in topic.type"><acre:block if="i > 0">, </acre:block>${t.text}</span></div>
+    <div class="alias" acre:if="topic.alias.length > 0">Alias: <span acre:for="i,a in topic.alias"><acre:block if="i > 0"> | </acre:block>${a}</span></div>
+    <div class="description" acre:if="topic.description">${topic.description.substring(0,400)}...</div>
+    <acre:block acre:if="topic.webpage && topic.webpage.length > 0">
+      <div class="property">
+        <h2>Web Pages</h2>
+        <ul>
+          <li acre:for="w in topic.webpage"><a href="${w.url}" target="_new">${w.text}</a></li>
+        </ul>
+      </div>
+    </acre:block>
+    <acre:block for="p in topic.properties">
+      <div class="property">
+        <h2>${p.text}</h2>
+        <ul>
+          <li acre:for="v in p.values"><a href="${v.url}" target="_new">${v.text}</a></li>
+        </ul>
+      </div>
+    </acre:block>
+  </acre:block>
+  <acre:block else="">
+    <div><code>${topic_id}</code> was not found</div>
+  </acre:block>
+</acre:block>

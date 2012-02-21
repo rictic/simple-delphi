@@ -1,0 +1,360 @@
+<acre:script>
+  var t = acre.require('templates');
+
+  if (acre.request.method == "POST") {
+    var question = JSON.parse(acre.request.body_params.question);
+    var question_id = question.question_id;
+    question = question.payload;
+    var params = JSON.parse(acre.request.body_params.params);
+  } else {
+    var question_id = "ag5zfnJhamEtcG9ydGljb3JKCxIEVGFzayJANTI1NmEwODU2MTRhODlmYjMzOGVhODY1MjVmYjcwYTUzNjI3MDViYTk4MWY0ZDM0Yjg4NTA2MzhkMDM0MmRiOAw";
+    var question = {
+      key: "/authority/twitter/TomCruise",
+      task: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cgwLEgR0YXNrGIL9Ngw",
+      name: "Tom Cruise",
+      url: "http://en.wikipedia.org/wiki/Tom_Cruise",
+      candidates: [ "/en/tom_cruise" , "/m/01qm9tf" , "/m/068bp7t" ],
+      curiosity: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cicLEgljdXJpb3NpdHkiGCs0YWZJVnZMZVhESjJDS2R2VGRPZVE9PQw"
+    }
+
+    var params = {
+      proxied : true
+    };
+  }
+
+  var mode = params.mode || "recon";
+  var max_candidates = params.max_candidates || 3;
+  var total_candidates = params.total_candidates || 3;
+  var most_relevant_first = (params.most_relevant_first && params.most_relevant_first == "true");
+  var training = (params.training && params.training == "true");
+  var judgments = params.judgments;
+
+  if (typeof question.candidates == "string") {
+    if (question.candidates == "") {
+      question.candidates = [];
+    } else {
+      question.candidates = [ question.candidates ];
+    }
+  }
+
+  if (typeof question.candidates == "undefined") {
+    question.candidates = [];
+  }
+
+  function search(query,options) {
+    if (!options) options = {};
+    query = query.replace(/"/g,'');
+    options.type_strict = "SHOULD";
+    options.limit = total_candidates;
+    options.prefixed = 1;
+    var results = acre.freebase.search(query, options).result;
+    var candidates = [];
+    for each (var result in results) {
+      candidates.push(result.id);
+    }
+    return candidates;
+  }
+
+  var new_candidates = [];
+  var query = ("relevance_query" in question) ? question.relevance_query.query : question.name;
+  if (query) {
+    var options = ("relevance_query" in question && "options" in question.relevance_query) ? question.relevance_query.options : params.relevance_options;
+    new_candidates = search(query,options);
+  }
+
+  // get the most relevant topic candidate
+  var most_relevant = new_candidates[0];
+
+  // need to remove any new candidates we already have,
+  // but that's tricky because of mids vs ids...
+  var mids = {};
+
+  // get mids for everything
+  var candidates = new_candidates.concat(question.candidates);
+  for each (var c in candidates) {
+    if (typeof c == "string") { // ignore candidates that are full objects
+      if (c.indexOf("/m/") == 0) { // already a mid
+        mids[c] = c;
+      } else { // need to look up the mid
+        var query = {"id":c, "mid":null};
+        var result = acre.freebase.mqlread(query).result;
+        if (result && result.mid) {
+          mids[c] = result.mid;
+        }
+      }
+    }
+  }
+
+  // get the mid of the most relevant topic
+  if (most_relevant) {
+    most_relevant = mids[most_relevant];
+  }
+
+  // dedupe new_candidates
+  var new_new_candidates = [];
+  for each (var new_cand in new_candidates) {
+    var found = false;
+    for each (var existing_cand in question.candidates) {
+      if (mids[new_cand] == mids[existing_cand]) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) new_new_candidates.push(mids[new_cand]);
+  }
+  new_candidates = new_new_candidates;
+
+  var how_many_new_candidates = (question.mix_in_candidates) ? question.mix_in_candidates : total_candidates - question.candidates.length;
+
+  if (how_many_new_candidates > 0) {
+    new_candidates = new_candidates.slice(0, how_many_new_candidates);
+  } else {
+    new_candidates = [];
+  }
+
+  question.candidates = question.candidates.concat(new_candidates);
+
+  if (most_relevant_first && most_relevant) {
+    var cc = [ most_relevant ];
+    for each (var c in question.candidates) {
+      if (c != most_relevant) {
+        cc.push(c);
+      }
+    }
+    question.candidates = cc;
+  }
+
+  if (mode == 'dupes') {
+    var topic_id = question.key;
+    if (topic_id) {
+      var cc = [];
+      for each (var c in question.candidates) {
+        if (c != topic_id) {
+          cc.push(c);
+        }
+      }
+      question.candidates = cc;
+
+      params.topic_guid = acre.freebase.mqlread({
+        "id" : topic_id,
+        "guid" : null
+      }).result.guid;
+    }
+  }
+
+  if ("shuffle" in params && params.shuffle) {
+    question.candidates.sort(function () { // shuffle the candidates
+      return Math.round(Math.random()) - 0.5;
+    });
+  }
+
+  if ("buttons" in params) {
+    var buttons = params.buttons;
+  } else {
+    var buttons = acre.require('configs').configs[mode].buttons;
+  }
+
+  if ("message" in params) {
+    var message = params.message;
+  } else {
+    var message = acre.require('configs').configs[mode].message;
+  }
+
+  var candidates = question.candidates;
+
+  var extra = {
+    "displayed_candidates": candidates
+  };
+
+  var candidate_attrs = {};
+  if ("as_of_time" in question) {
+    candidate_attrs.as_of_time = question.as_of_time;
+  }
+</acre:script>
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Matchmaker</title>
+
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/ui-lightness/jquery-ui.css" type="text/css">
+    <link rel="stylesheet" href="http://freebaselibs.com/static/suggest/1.3/suggest.min.css" type="text/css">
+    <link rel="stylesheet" href="styles/default_styles.css" type="text/css">
+    <link rel="stylesheet" href="styles/styles.css" type="text/css">
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" type="text/javascript"></script>
+    <script src="http://freebaselibs.com/static/suggest/1.3/suggest.min.js" type="text/javascript"></script>
+    <script src="http://postmessage.freebaseapps.com/postmessage.js" type="text/javascript"></script>
+
+    <script type="text/javascript" charset="utf-8">
+      var mode = "${mode}";
+      var question_id = "${question_id}";
+      var extra = ${JSON.stringify(extra,null,2)};
+      var params = ${JSON.stringify(params,null,2)};
+
+      function send_judgment(question_id, judgment, topic_id) {
+        var j = {
+          question_id : question_id,
+          judgment : judgment,
+          extra : extra
+        };
+        j.extra.topic_id = topic_id;
+        pm({
+          target: window.parent,
+          type: "judgment",
+          data: j
+        });
+      }
+
+      function error(e, xhr, obj, errorThrown) {
+        try {
+          var msg = JSON.parse(xhr.responseText).message;
+          alert(msg);
+        } catch (e) {
+          var msg = xhr.responseText;
+          $("html").html(msg);
+        }
+      }
+
+      function cast_judgment(button) {
+        var judgment = button.attr("judgment");
+        var topic_id = button.attr("value");
+        send_judgment(question_id, judgment, topic_id);
+      }
+
+      function load_topic(question, target, topic_id) {
+        var candidates = target.closest(".question").find(".candidates");
+        candidates.find("tr").prepend('<td><div class="candidate_placeholder"><div class="candidate"><img class="spinner" src="images/spinner.gif"></div></div></td>');
+        var placeholder = candidates.find(".candidate_placeholder:first");
+        load_candidate(question,placeholder,topic_id);
+      }
+
+      function load_candidate(question,placeholder,topic_id,as_of_time) {
+        var data = {
+          topic_id : topic_id,
+          as_of_time : as_of_time,
+          params : params
+        };
+
+        placeholder.load("candidate", {
+          params : JSON.stringify(data)
+        }, function() {
+          prepare(placeholder);
+        });
+      }
+
+      function prepare(placeholder) {
+        $(".candidate").removeClass("selected").hover(
+          function() {
+            $(".candidate").removeClass("selected");
+            $(this).addClass("selected");
+          },
+          function() {
+          }
+        );
+
+        placeholder.find(".candidate button").button().click(function() {
+          cast_judgment($(this));
+        });
+
+        $(".candidate:first").addClass("selected");
+
+        var max_height = 0;
+        placeholder.find(".candidate_body").each(function() {
+          var h = $(this).height();
+          if (h > max_height) max_height = h;
+        }).each(function() {
+          $(this).height(max_height + 30);
+          // 30 because the thumbnail is loaded asynchronously and might screw up the calculations
+          // so we add a little padding. Yeah, I know, it's a hack.
+
+          // also resize the source containers if needed
+          var h = $(document).height();
+          $(".source iframe").height(h);
+        });
+      };
+
+      function init(question) {
+        question.find(".post_form").submit();
+
+        question.find(".candidate_placeholder").each(function(i) {
+          var topic_id = $(this).attr("topic_id");
+          var as_of_time = $(this).attr("as_of_time");
+          load_candidate(question,$(this),topic_id,as_of_time);
+        });
+
+        var suggest = question.find(".suggest input");
+        if (suggest.length > 0) {
+          var suggest_confs = {};
+          if (mode == 'dupes') {
+            var excluded_guid = suggest.attr("excluded_guid");
+            if (excluded_guid) {
+              suggest_confs.exclude_guids = excluded_guid;
+            }
+          }
+          suggest.suggest(suggest_confs).bind("fb-select", function(e, data) {
+            load_topic(question,$(this),data.id);
+          });
+        }
+
+        question.find("button::visible").button().click(function() {
+          cast_judgment($(this));
+        })
+      }
+
+      $(function() {
+        $("body").ajaxError(error);
+        init($(".question"));
+      })
+    </script>
+  </head>
+
+  <body>
+    <div class="question">
+      <table class="skeleton">
+        <tr>
+          <td class="source_container">
+            <div class="source">
+              ${t.render_item(question, params)}
+            </div>
+          </td>
+
+          <td width="100%">
+
+            <div class="judgments" acre:if="judgments">
+              <h4>Collected Judgments &not;</h4>
+              <ul>
+                <li acre:for="j in judgments">${j.judgment} <a href="http://www.freebase.com/view${j.value}" acre:if="j.value" target="_new">${j.value}</a> <a href="http://www.freebase.com/view${j.user_id}" class="decoration" target="_new">${j.user_id.split('/').pop()}</a> | <small>${j.time / 1000} seconds</small></li>
+              </ul>
+            </div>
+
+            <div class="controls">
+              <table>
+                <tr>
+                  <td nowrap="">
+                    <div class="suggestion" acre:if="candidates && candidates.length > 0">- <span class="message">${acre.markup.bless(message)}</span> &not;</div>
+                    <div class="suggestion" acre:else="">- <span class="message">No candidates found</span></div>
+                  </td>
+                  ${t.render_controls(buttons, question, params, training)}
+                </tr>
+              </table>
+            </div>
+
+            <acre:block if="training">${t.render_training_result(question)}</acre:block>
+
+            <div class="candidates">
+              <table>
+                <tr>
+                  <td acre:for="i,c in candidates" acre:if="i < max_candidates">
+                    <div class="candidate_placeholder" topic_id="${c}" acre:attrs="candidate_attrs"><div class="spinner"><img src="images/spinner.gif"></div></div>
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>
