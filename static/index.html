@@ -10,7 +10,7 @@
 </head>
 <body>
 
-  <div class="logged_in invisible">
+  <div>
     <div id="activity" class="message hidden"><span class="text"></span> <img src="/images/spinner.gif"></div>
 
     <iframe id="app" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
@@ -176,8 +176,8 @@
     function get_app(question) {
       //TOOD(stefanom): these need to call out refinery with the task_id to get the app associated with this question
       return {
-        "name" : "dummy",
-        "url" : "/apps/dummy/index.html"
+        "name" : "matchmaker",
+        "url" : "/apps/matchmaker/index.html"
       };
     }
 
