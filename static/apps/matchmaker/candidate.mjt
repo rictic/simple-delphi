@@ -1,6 +1,4 @@
 <acre:script>
-  if (acre.request.method != "POST") throw Error("This URL only supports POST");
-
   var params = JSON.parse(acre.request.body_params.params);
 
   var topic_id = params.topic_id;

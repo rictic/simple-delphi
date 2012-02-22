@@ -13,6 +13,7 @@
     <script src="http://freebaselibs.com/static/suggest/1.3/suggest.min.js" type="text/javascript"></script>
     <script src="configs.js" type="text/javascript"></script>
     <script src="mjt/mjt.js" type="text/javascript"></script>
+
     <script type="text/javascript" charset="utf-8">
       var question = {
         key: "/authority/twitter/TomCruise",
@@ -40,6 +41,14 @@
         judgments = params.judgments;
       }
 
+      function freebaseSearch(query, options) {
+        options = options || {};
+        options.query = query;
+        return $.getJSON("https://www.googleapis.com/freebase/v1/search?callback=?", options);
+      }
+      function mqlRead(query) {
+        return $.getJSON("https://www.googleapis.com/freebase/v1/mqlread?callback=?", {query:JSON.stringify(query)});
+      }
 
       function main(q) {
         question = q;
@@ -63,51 +72,73 @@
           options.type_strict = "SHOULD";
           options.limit = total_candidates;
           options.prefixed = true;
-          acre.freebase.search(query, options).success(function(result) {
-            var candidates = [];
-            for (var i = 0; i < results.length; i++) {
-              candidates.push(results[i].id);
-            }
+          freebaseSearch(query, options).success(function(results) {
+              var candidates = [];
+              for (var i = 0; i < results.length; i++) {
+                candidates.push(results[i].id);
+              }
             onSuccess(candidates);
           });
         }
 
-        var new_candidates = [];
+
         var query = ("relevance_query" in question) ? question.relevance_query.query : question.name;
         if (query) {
           var options = ("relevance_query" in question && "options" in question.relevance_query) ? question.relevance_query.options : params.relevance_options;
-          new_candidates = search(query,options);
+          search(query,options, handleNewCandidates);
+        } else {
+          handleNewCandidates([]);
         }
 
-        // get the most relevant topic candidate
-        var most_relevant = new_candidates[0];
+        //takes the new candidates, gets their mids, passes them along to handleCandidates
+        function handleNewCandidates(new_candidates) {
+          var candidates = new_candidates.concat(question.candidates);
+          var mids = [];
+          var ids_to_convert = [];
 
-        // need to remove any new candidates we already have,
-        // but that's tricky because of mids vs ids...
-        var mids = {};
-
-        // get mids for everything
-        var candidates = new_candidates.concat(question.candidates);
-        for (var i = 0; i < candidates.length; i++) {
-          var c = candidates[i];
-          if (typeof c == "string") { // ignore candidates that are full objects
-            if (c.indexOf("/m/") == 0) { // already a mid
-              mids[c] = c;
-            } else { // need to look up the mid
-              var query = {"id":c, "mid":null};
-              var result = acre.freebase.mqlread(query).result;
-              if (result && result.mid) {
-                mids[c] = result.mid;
+          // get mids for everything
+          for (var i = 0; i < candidates.length; i++) {
+            var c = candidates[i];
+            if (typeof c == "string") { // ignore candidates that are full objects
+              if (c.indexOf("/m/") == 0) { // already a mid
+                mids.push(c);
+              } else { // need to look up the mid
+                ids_to_convert.push(c);
               }
             }
           }
+          getIdToMidMapping(ids_to_convert, function(mapping) {
+            for (var i = 0; i < mids.length; i++)
+              mapping[mids[i]] = mids[i];;
+            displayCandidates(new_candidates, mapping);
+          });
         }
 
-        // get the mid of the most relevant topic
-        if (most_relevant) {
-          most_relevant = mids[most_relevant];
-        }
+        //Takes a list of ids, calls onSuccess with an object that maps those ids to their mids.
+        function getIdToMidMapping(ids, onSuccess) {
+          var mapping = {};
+          for (var i = 0; i < ids.length; i++) {
+            mqlRead({
+              "mid": null,
+              "id": ids[i]
+            }).success(function(response) {
+              mapping[response.result["id"]] = response.result["mid"];
+              responseReceived();
+            });
+          }
 
+          var expected_responses = ids.length;
+          var received_responses = 0;
+          function responseReceived() {
+            received_responses++;
+            if (received_responses === expected_responses) {
+              onSuccess(mapping);
+            }
+          }
+        }
+      }
+
+      function displayCandidates(new_candidates, mids) {
         // dedupe new_candidates
         var new_new_candidates = [];
         for (var i = 0; i < new_candidates.length; i++) {
@@ -134,6 +165,15 @@
 
         question.candidates = question.candidates.concat(new_candidates);
 
+
+        // get the most relevant topic candidate
+        var most_relevant = new_candidates[0];
+
+        // get the mid of the most relevant topic
+        if (most_relevant) {
+          most_relevant = mids[most_relevant];
+        }
+
         if (most_relevant_first && most_relevant) {
           var cc = [ most_relevant ];
           for (var i = 0; i < question.candidates.length; i++) {
@@ -157,6 +197,7 @@
             }
             question.candidates = cc;
 
+            //NOTE(rictic): known broken, use mqlRead, convert to async
             params.topic_guid = acre.freebase.mqlread({
               "id" : topic_id,
               "guid" : null
@@ -192,6 +233,7 @@
         if ("as_of_time" in question) {
           candidate_attrs.as_of_time = question.as_of_time;
         }
+        //console.warn(render_question(question, params, buttons, training));
       }
 
       function error(e, xhr, obj, errorThrown) {
@@ -223,17 +265,37 @@
       }
 
       function load_candidate(question,placeholder,topic_id,as_of_time) {
-        var data = {
-          topic_id : topic_id,
-          as_of_time : as_of_time,
-          params : params
-        };
-
         placeholder.load("candidate", {
           params : JSON.stringify(data)
         }, function() {
           prepare(placeholder);
         });
+
+          var selection = params.selection || "strict"; // can be "strict" or "lax"
+          var lax_label = params.lax_label || "Narrower/Broader";
+          var match_label = params.match_label || "Match";
+
+          // lookup the MID of the entity in freebase if it's not already a MID
+          if (topic_id.indexOf("/m/") !== 0) {
+            topic_id = acre.freebase.mqlread({ id : topic_id, mid : null }).result.mid;
+          }
+
+          var topic_viewer_path = params.topic_viewer_path || "topic_viewer";
+          var topic_viewer_params = params.topic_viewer_params || {};
+
+          var topic_viewer = acre.require(topic_viewer_path);
+
+        // <div class="candidate">
+        //   <div class="candidate_body">
+        //     <div class="selection ${selection}">
+        //       <button acre:if="selection == 'lax'" class="judgment button close-match" judgment="close_matches" value="${topic_id}">${lax_label}</button>
+        //       <button class="answer button match" judgment="matches" value="${topic_id}">${match_label}</button>
+        //     </div>
+        //     ${topic_viewer.content(topic_id, topic_viewer_params)}
+        //   </div>
+        // </div>
+
+
       }
 
       function prepare(placeholder) {
@@ -304,57 +366,60 @@
 
   <body body onload="mjt.run()" style="display:none">
     <div class="question">
-      <table class="skeleton">
-        <tr>
-          <td class="source_container">
-            <div class="source">
-              ${t.render_item(question, params)}
-            </div>
-          </td>
-
-          <td width="100%">
-
-            <div class="judgments" mjt.if="judgments">
-              <h4>Collected Judgments &not;</h4>
-              <ul>
-                <li mjt.for="j in judgments">${j.judgment} <a href="http://www.freebase.com/view${j.value}" mjt.if="j.value" target="_new">${j.value}</a> <a href="http://www.freebase.com/view${j.user_id}" class="decoration" target="_new">${j.user_id.split('/').pop()}</a> | <small>${j.time / 1000} seconds</small></li>
-              </ul>
-            </div>
-
-            <div class="controls">
-              <table>
-                <tr>
-                  <td nowrap="">
-                    <div class="suggestion" mjt.if="candidates && candidates.length > 0">- <span class="message">${acre.markup.bless(message)}</span> &not;</div>
-                    <div class="suggestion" mjt.else="">- <span class="message">No candidates found</span></div>
-                  </td>
-                  ${t.render_controls(buttons, question, params, training)}
-                </tr>
-              </table>
-            </div>
-
-            <div mjt.if="training">${t.render_training_result(question)}</div>
-
-            <div class="candidates">
-              <table>
-                <tr>
-                  <td mjt.for="i,c in candidates" mjt.if="i < max_candidates">
-                    <div class="candidate_placeholder" topic_id="${c}" mjt.attrs="candidate_attrs"><div class="spinner"><img src="images/spinner.gif"></div></div>
-                  </td>
-                </tr>
-              </table>
-            </div>
-          </td>
-        </tr>
-      </table>
     </div>
 
 
 
     <div style='display: none;'>
 
+<span strip="true" def="render_question(question, params, buttons, training)">
+  <table class="skeleton">
+    <tr>
+      <td class="source_container">
+        <div class="source">
+          ${render_item(question, params)}
+        </div>
+      </td>
+
+      <td width="100%">
+
+        <div class="judgments" mjt.if="judgments">
+          <h4>Collected Judgments &not;</h4>
+          <ul>
+            <li mjt.for="j in judgments">${j.judgment} <a href="http://www.freebase.com/view${j.value}" mjt.if="j.value" target="_new">${j.value}</a> <a href="http://www.freebase.com/view${j.user_id}" class="decoration" target="_new">${j.user_id.split('/').pop()}</a> | <small>${j.time / 1000} seconds</small></li>
+          </ul>
+        </div>
+
+        <div class="controls">
+          <table>
+            <tr>
+              <td nowrap="">
+                <div class="suggestion" mjt.if="candidates && candidates.length > 0">- <span class="message">${acre.markup.bless(message)}</span> &not;</div>
+                <div class="suggestion" mjt.else="">- <span class="message">No candidates found</span></div>
+              </td>
+              ${render_controls(buttons, question, params, training)}
+            </tr>
+          </table>
+        </div>
+
+        <div mjt.if="training">${render_training_result(question)}</div>
+
+        <div class="candidates">
+          <table>
+            <tr>
+              <td mjt.for="i,c in candidates" mjt.if="i < max_candidates">
+                <div class="candidate_placeholder" topic_id="${c}" mjt.attrs="candidate_attrs"><div class="spinner"><img src="images/spinner.gif"></div></div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </td>
+    </tr>
+  </table>
+</span
+
 <span strip="true" def="render_item(question, params)">
-  <script>
+  <div mjt.script="">
     var cleaning_proxy = "/proxy";
     var timestamp = (new Date()).getTime();
     var url = question.url;
@@ -367,7 +432,7 @@
     if (typeof tags == "string") tags = [tags];
     var description = question.description;
     var renderer_url = params.renderer_url || url;
-  </script>
+  </div>
   <span strip="true" if="name">
     <h1>${name}</h1>
     <div class="description" mjt.if="description">${description}</div>
