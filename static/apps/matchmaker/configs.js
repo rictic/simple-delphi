@@ -1,4 +1,4 @@
-var configs = {
+var mode_configs = {
 
   recon : {
     message : "Select a topic that matches",

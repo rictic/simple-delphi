@@ -1,177 +1,3 @@
-<acre:script>
-  var t = acre.require('templates');
-
-  if (acre.request.method == "POST") {
-    var question = JSON.parse(acre.request.body_params.question);
-    var question_id = question.question_id;
-    question = question.payload;
-    var params = JSON.parse(acre.request.body_params.params);
-  } else {
-    var question_id = "ag5zfnJhamEtcG9ydGljb3JKCxIEVGFzayJANTI1NmEwODU2MTRhODlmYjMzOGVhODY1MjVmYjcwYTUzNjI3MDViYTk4MWY0ZDM0Yjg4NTA2MzhkMDM0MmRiOAw";
-    var question = {
-      key: "/authority/twitter/TomCruise",
-      task: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cgwLEgR0YXNrGIL9Ngw",
-      name: "Tom Cruise",
-      url: "http://en.wikipedia.org/wiki/Tom_Cruise",
-      candidates: [ "/en/tom_cruise" , "/m/01qm9tf" , "/m/068bp7t" ],
-      curiosity: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cicLEgljdXJpb3NpdHkiGCs0YWZJVnZMZVhESjJDS2R2VGRPZVE9PQw"
-    }
-
-    var params = {
-      proxied : true
-    };
-  }
-
-  var mode = params.mode || "recon";
-  var max_candidates = params.max_candidates || 3;
-  var total_candidates = params.total_candidates || 3;
-  var most_relevant_first = (params.most_relevant_first && params.most_relevant_first == "true");
-  var training = (params.training && params.training == "true");
-  var judgments = params.judgments;
-
-  if (typeof question.candidates == "string") {
-    if (question.candidates == "") {
-      question.candidates = [];
-    } else {
-      question.candidates = [ question.candidates ];
-    }
-  }
-
-  if (typeof question.candidates == "undefined") {
-    question.candidates = [];
-  }
-
-  function search(query,options) {
-    if (!options) options = {};
-    query = query.replace(/"/g,'');
-    options.type_strict = "SHOULD";
-    options.limit = total_candidates;
-    options.prefixed = 1;
-    var results = acre.freebase.search(query, options).result;
-    var candidates = [];
-    for each (var result in results) {
-      candidates.push(result.id);
-    }
-    return candidates;
-  }
-
-  var new_candidates = [];
-  var query = ("relevance_query" in question) ? question.relevance_query.query : question.name;
-  if (query) {
-    var options = ("relevance_query" in question && "options" in question.relevance_query) ? question.relevance_query.options : params.relevance_options;
-    new_candidates = search(query,options);
-  }
-
-  // get the most relevant topic candidate
-  var most_relevant = new_candidates[0];
-
-  // need to remove any new candidates we already have,
-  // but that's tricky because of mids vs ids...
-  var mids = {};
-
-  // get mids for everything
-  var candidates = new_candidates.concat(question.candidates);
-  for each (var c in candidates) {
-    if (typeof c == "string") { // ignore candidates that are full objects
-      if (c.indexOf("/m/") == 0) { // already a mid
-        mids[c] = c;
-      } else { // need to look up the mid
-        var query = {"id":c, "mid":null};
-        var result = acre.freebase.mqlread(query).result;
-        if (result && result.mid) {
-          mids[c] = result.mid;
-        }
-      }
-    }
-  }
-
-  // get the mid of the most relevant topic
-  if (most_relevant) {
-    most_relevant = mids[most_relevant];
-  }
-
-  // dedupe new_candidates
-  var new_new_candidates = [];
-  for each (var new_cand in new_candidates) {
-    var found = false;
-    for each (var existing_cand in question.candidates) {
-      if (mids[new_cand] == mids[existing_cand]) {
-        found = true;
-        break;
-      }
-    }
-    if (!found) new_new_candidates.push(mids[new_cand]);
-  }
-  new_candidates = new_new_candidates;
-
-  var how_many_new_candidates = (question.mix_in_candidates) ? question.mix_in_candidates : total_candidates - question.candidates.length;
-
-  if (how_many_new_candidates > 0) {
-    new_candidates = new_candidates.slice(0, how_many_new_candidates);
-  } else {
-    new_candidates = [];
-  }
-
-  question.candidates = question.candidates.concat(new_candidates);
-
-  if (most_relevant_first && most_relevant) {
-    var cc = [ most_relevant ];
-    for each (var c in question.candidates) {
-      if (c != most_relevant) {
-        cc.push(c);
-      }
-    }
-    question.candidates = cc;
-  }
-
-  if (mode == 'dupes') {
-    var topic_id = question.key;
-    if (topic_id) {
-      var cc = [];
-      for each (var c in question.candidates) {
-        if (c != topic_id) {
-          cc.push(c);
-        }
-      }
-      question.candidates = cc;
-
-      params.topic_guid = acre.freebase.mqlread({
-        "id" : topic_id,
-        "guid" : null
-      }).result.guid;
-    }
-  }
-
-  if ("shuffle" in params && params.shuffle) {
-    question.candidates.sort(function () { // shuffle the candidates
-      return Math.round(Math.random()) - 0.5;
-    });
-  }
-
-  if ("buttons" in params) {
-    var buttons = params.buttons;
-  } else {
-    var buttons = acre.require('configs').configs[mode].buttons;
-  }
-
-  if ("message" in params) {
-    var message = params.message;
-  } else {
-    var message = acre.require('configs').configs[mode].message;
-  }
-
-  var candidates = question.candidates;
-
-  var extra = {
-    "displayed_candidates": candidates
-  };
-
-  var candidate_attrs = {};
-  if ("as_of_time" in question) {
-    candidate_attrs.as_of_time = question.as_of_time;
-  }
-</acre:script>
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -185,26 +11,187 @@
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript"></script>
     <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" type="text/javascript"></script>
     <script src="http://freebaselibs.com/static/suggest/1.3/suggest.min.js" type="text/javascript"></script>
-    <script src="http://postmessage.freebaseapps.com/postmessage.js" type="text/javascript"></script>
-
+    <script src="configs.js" type="text/javascript"></script>
+    <script src="mjt/mjt.js" type="text/javascript"></script>
     <script type="text/javascript" charset="utf-8">
-      var mode = "${mode}";
-      var question_id = "${question_id}";
-      var extra = ${JSON.stringify(extra,null,2)};
-      var params = ${JSON.stringify(params,null,2)};
+      var question = {
+        key: "/authority/twitter/TomCruise",
+        task: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cgwLEgR0YXNrGIL9Ngw",
+        name: "Tom Cruise",
+        url: "http://en.wikipedia.org/wiki/Tom_Cruise",
+        candidates: [ "/en/tom_cruise" , "/m/01qm9tf" , "/m/068bp7t" ],
+        curiosity: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cicLEgljdXJpb3NpdHkiGCs0YWZJVnZMZVhESjJDS2R2VGRPZVE9PQw"
+      }
 
-      function send_judgment(question_id, judgment, topic_id) {
-        var j = {
-          question_id : question_id,
-          judgment : judgment,
-          extra : extra
+      var extra = {}; //NOTE: originally json strinfigying
+      var params = {
+        proxied : true
+      };
+      var configs = params;
+      var mode, max_vandidates, total_candidates, most_relevant_first, training, judgments;
+
+      function acceptConfiguration(configs) {
+        params = configs;
+        mode = configs.mode || "recon";
+        max_candidates = params.max_candidates || 3;
+        total_candidates = params.total_candidates || 3;
+        most_relevant_first = (params.most_relevant_first && params.most_relevant_first == "true");
+        training = (params.training && params.training == "true");
+        judgments = params.judgments;
+      }
+
+
+      function main(q) {
+        question = q;
+
+        if (typeof question.candidates == "string") {
+          if (question.candidates == "") {
+            question.candidates = [];
+          } else {
+            question.candidates = [ question.candidates ];
+          }
+        }
+
+        if (typeof question.candidates == "undefined") {
+          question.candidates = [];
+        }
+
+        function search(query, options, onSuccess) {
+          if (!options) options = {};
+          query = query.replace(/"/g,'');
+          //NOTE(rictic): not supported in new freebase search api
+          options.type_strict = "SHOULD";
+          options.limit = total_candidates;
+          options.prefixed = true;
+          acre.freebase.search(query, options).success(function(result) {
+            var candidates = [];
+            for (var i = 0; i < results.length; i++) {
+              candidates.push(results[i].id);
+            }
+            onSuccess(candidates);
+          });
+        }
+
+        var new_candidates = [];
+        var query = ("relevance_query" in question) ? question.relevance_query.query : question.name;
+        if (query) {
+          var options = ("relevance_query" in question && "options" in question.relevance_query) ? question.relevance_query.options : params.relevance_options;
+          new_candidates = search(query,options);
+        }
+
+        // get the most relevant topic candidate
+        var most_relevant = new_candidates[0];
+
+        // need to remove any new candidates we already have,
+        // but that's tricky because of mids vs ids...
+        var mids = {};
+
+        // get mids for everything
+        var candidates = new_candidates.concat(question.candidates);
+        for (var i = 0; i < candidates.length; i++) {
+          var c = candidates[i];
+          if (typeof c == "string") { // ignore candidates that are full objects
+            if (c.indexOf("/m/") == 0) { // already a mid
+              mids[c] = c;
+            } else { // need to look up the mid
+              var query = {"id":c, "mid":null};
+              var result = acre.freebase.mqlread(query).result;
+              if (result && result.mid) {
+                mids[c] = result.mid;
+              }
+            }
+          }
+        }
+
+        // get the mid of the most relevant topic
+        if (most_relevant) {
+          most_relevant = mids[most_relevant];
+        }
+
+        // dedupe new_candidates
+        var new_new_candidates = [];
+        for (var i = 0; i < new_candidates.length; i++) {
+          var new_cand = new_candidates[i];
+          var found = false;
+          for (var j = 0; j < question.candidates.length; j++) {
+            var existing_cand = question.candidates[j];
+            if (mids[new_cand] == mids[existing_cand]) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) new_new_candidates.push(mids[new_cand]);
+        }
+        new_candidates = new_new_candidates;
+
+        var how_many_new_candidates = (question.mix_in_candidates) ? question.mix_in_candidates : total_candidates - question.candidates.length;
+
+        if (how_many_new_candidates > 0) {
+          new_candidates = new_candidates.slice(0, how_many_new_candidates);
+        } else {
+          new_candidates = [];
+        }
+
+        question.candidates = question.candidates.concat(new_candidates);
+
+        if (most_relevant_first && most_relevant) {
+          var cc = [ most_relevant ];
+          for (var i = 0; i < question.candidates.length; i++) {
+            var c = question.candidates[i];
+            if (c != most_relevant) {
+              cc.push(c);
+            }
+          }
+          question.candidates = cc;
+        }
+
+        if (mode == 'dupes') {
+          var topic_id = question.key;
+          if (topic_id) {
+            var cc = [];
+            for (var i = 0; i < question.candidates.length; i++) {
+              var c = question.candidates[i];
+              if (c != topic_id) {
+                cc.push(c);
+              }
+            }
+            question.candidates = cc;
+
+            params.topic_guid = acre.freebase.mqlread({
+              "id" : topic_id,
+              "guid" : null
+            }).result.guid;
+          }
+        }
+
+        if ("shuffle" in params && params.shuffle) {
+          question.candidates.sort(function () { // shuffle the candidates
+            return Math.round(Math.random()) - 0.5;
+          });
+        }
+
+        if ("buttons" in params) {
+          var buttons = params.buttons;
+        } else {
+          var buttons = mode_configs[mode].buttons;
+        }
+
+        if ("message" in params) {
+          var message = params.message;
+        } else {
+          var message = mode_configs[mode].message;
+        }
+
+        var candidates = question.candidates;
+
+        var extra = {
+          "displayed_candidates": candidates
         };
-        j.extra.topic_id = topic_id;
-        pm({
-          target: window.parent,
-          type: "judgment",
-          data: j
-        });
+
+        var candidate_attrs = {};
+        if ("as_of_time" in question) {
+          candidate_attrs.as_of_time = question.as_of_time;
+        }
       }
 
       function error(e, xhr, obj, errorThrown) {
@@ -220,7 +207,12 @@
       function cast_judgment(button) {
         var judgment = button.attr("judgment");
         var topic_id = button.attr("value");
-        send_judgment(question_id, judgment, topic_id);
+        var j = {
+          judgment : judgment,
+          extra : extra
+        };
+        j.extra.topic_id = topic_id;
+        Delphi.submitJudgment(j);
       }
 
       function load_topic(question, target, topic_id) {
@@ -310,7 +302,7 @@
     </script>
   </head>
 
-  <body>
+  <body body onload="mjt.run()" style="display:none">
     <div class="question">
       <table class="skeleton">
         <tr>
@@ -322,10 +314,10 @@
 
           <td width="100%">
 
-            <div class="judgments" acre:if="judgments">
+            <div class="judgments" mjt.if="judgments">
               <h4>Collected Judgments &not;</h4>
               <ul>
-                <li acre:for="j in judgments">${j.judgment} <a href="http://www.freebase.com/view${j.value}" acre:if="j.value" target="_new">${j.value}</a> <a href="http://www.freebase.com/view${j.user_id}" class="decoration" target="_new">${j.user_id.split('/').pop()}</a> | <small>${j.time / 1000} seconds</small></li>
+                <li mjt.for="j in judgments">${j.judgment} <a href="http://www.freebase.com/view${j.value}" mjt.if="j.value" target="_new">${j.value}</a> <a href="http://www.freebase.com/view${j.user_id}" class="decoration" target="_new">${j.user_id.split('/').pop()}</a> | <small>${j.time / 1000} seconds</small></li>
               </ul>
             </div>
 
@@ -333,21 +325,21 @@
               <table>
                 <tr>
                   <td nowrap="">
-                    <div class="suggestion" acre:if="candidates && candidates.length > 0">- <span class="message">${acre.markup.bless(message)}</span> &not;</div>
-                    <div class="suggestion" acre:else="">- <span class="message">No candidates found</span></div>
+                    <div class="suggestion" mjt.if="candidates && candidates.length > 0">- <span class="message">${acre.markup.bless(message)}</span> &not;</div>
+                    <div class="suggestion" mjt.else="">- <span class="message">No candidates found</span></div>
                   </td>
                   ${t.render_controls(buttons, question, params, training)}
                 </tr>
               </table>
             </div>
 
-            <acre:block if="training">${t.render_training_result(question)}</acre:block>
+            <div mjt.if="training">${t.render_training_result(question)}</div>
 
             <div class="candidates">
               <table>
                 <tr>
-                  <td acre:for="i,c in candidates" acre:if="i < max_candidates">
-                    <div class="candidate_placeholder" topic_id="${c}" acre:attrs="candidate_attrs"><div class="spinner"><img src="images/spinner.gif"></div></div>
+                  <td mjt.for="i,c in candidates" mjt.if="i < max_candidates">
+                    <div class="candidate_placeholder" topic_id="${c}" mjt.attrs="candidate_attrs"><div class="spinner"><img src="images/spinner.gif"></div></div>
                   </td>
                 </tr>
               </table>
@@ -356,5 +348,98 @@
         </tr>
       </table>
     </div>
+
+
+
+    <div style='display: none;'>
+
+<span strip="true" def="render_item(question, params)">
+  <script>
+    var cleaning_proxy = "/proxy";
+    var timestamp = (new Date()).getTime();
+    var url = question.url;
+    var post_params = question.post_params;
+    if (url instanceof Array) url = url[0];
+    var html = question.html;
+    var name = question.name;
+    if (name instanceof Array) name = name[0];
+    var tags = question.tags;
+    if (typeof tags == "string") tags = [tags];
+    var description = question.description;
+    var renderer_url = params.renderer_url || url;
+  </script>
+  <span strip="true" if="name">
+    <h1>${name}</h1>
+    <div class="description" mjt.if="description">${description}</div>
+    <div class="tags" mjt.if="tags"><span mjt.for="i,t in tags"><span strip="true" if="i > 0">, </span>${t}</span></div>
+  </span>
+  <span strip="true" if="html">
+    <div class="content">${acre.markup.bless(html)}</div>
+  </span>
+  <span strip="true" elif="post_params">
+    <iframe src="about:blank" name="iframe-${timestamp}"></iframe>
+    <form class="post_form" action="${renderer_url}" method="post" target="iframe-${timestamp}" style="display:none;">
+      <input mjt.for="name,value in post_params" type="hidden" name="${name}" value="${(typeof value == 'object') ? JSON.stringify(value) : value}" />
+    </form>
+  </span>
+  <span strip="true" elif="url">
+    <span strip="true" if="params.proxied">
+      <span strip="true" if="params.defer">
+        <iframe deferred_src="${cleaning_proxy}?url=${acre.form.quote(url)}&amp;bust=${timestamp}"></iframe>
+      </span>
+      <span strip="true" else="">
+        <iframe src="${cleaning_proxy}?url=${acre.form.quote(url)}&amp;bust=${timestamp}"></iframe>
+      </span>
+    </span>
+    <span strip="true" else="">
+      <span strip="true" if="params.defer">
+        <iframe deferred_src="${url}"></iframe>
+      </span>
+      <span strip="true" else="">
+        <iframe src="${url}"></iframe>
+      </span>
+    </span>
+  </span>
+  <span strip="true" else="">
+    <div class="error">No url or html fragment can be found for this question</div>
+  </span>
+</span>
+
+<span strip="true" def="render_controls(buttons, question, params, training)">
+  <td mjt.if="!params.no_search" nowrap="">
+    <mjt.script>
+      var attrs = {};
+      var name = question.name;
+      if (name instanceof Array) name = name[0];
+      if (name && params.populate_search) {
+        attrs.value = name;
+      }
+      if ("topic_guid" in params) {
+        attrs.excluded_guid = params.topic_guid;
+      }
+    </mjt.script>
+    <div class="suggest">
+      <div><small>Search directly for a candidate &not;</small></div>
+      <div><input type="text" acre:attrs="attrs"></div>
+    </div>
+  </td>
+  <span strip="true" for="b in buttons">
+    <td nowrap="" mjt.if="!training || (training && b.training)">
+      <button class="judgment button ${b.judgment}" judgment="${b.judgment}" style="${b.style || ''}">${acre.markup.bless(b.markup)}</button>
+    </td>
+  </span>
+</span>
+
+<span strip="true" def="render_training_result(question)">
+  <div class="result hidden">
+    <h3 class="right_answer hidden">Correct!</h3>
+    <h3 class="wrong_answer hidden">Sorry, that was wrong</h3>
+    <div class="explanation" mjt.if="question.master_answer_explanation">${question.master_answer_explanation}</div>
+    <div class="buttons"><button>next &raquo;</button></div>
+  </div>
+</span>
+
+    </div>
   </body>
+  <script src="/client/delphi.js" type="text/javascript"></script>
 </html>
