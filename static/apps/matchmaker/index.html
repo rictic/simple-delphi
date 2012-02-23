@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Matchmaker</title>
+
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/ui-lightness/jquery-ui.css" type="text/css">
+    <link rel="stylesheet" href="http://freebaselibs.com/static/suggest/1.3/suggest.min.css" type="text/css">
+    <link rel="stylesheet" href="styles/default_styles.css" type="text/css">
+    <link rel="stylesheet" href="styles/styles.css" type="text/css">
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" type="text/javascript"></script>
+    <script src="http://freebaselibs.com/static/suggest/1.3/suggest.min.js" type="text/javascript"></script>
+    <script src="configs.js" type="text/javascript"></script>
+    <script src="mjt/mjt.js" type="text/javascript"></script>
+  </head>
+
+  <body style="display:none">
+
+<!-- Templates -->
+<span mjt.strip="true" mjt.def="render_item(question, params)">
+  <div mjt.script="">
+    var cleaning_proxy = "http://cleaning-proxy.freebaseapps.com/proxy";
+    var timestamp = (new Date()).getTime();
+    var url = question.url;
+    var post_params = question.post_params;
+    if (url instanceof Array) url = url[0];
+    var html = question.html;
+    var name = question.name;
+    if (name instanceof Array) name = name[0];
+    var tags = question.tags;
+    if (typeof tags == "string") tags = [tags];
+    var description = question.description;
+    var renderer_url = params.renderer_url || url;
+  </div>
+  <span mjt.strip="true" mjt.if="name">
+    <h1>${name}</h1>
+    <div class="description" mjt.if="description">${description}</div>
+    <div class="tags" mjt.if="tags"><span mjt.for="i,t in tags"><span mjt.strip="true" mjt.if="i > 0">, </span>${t}</span></div>
+  </span>
+  <span mjt.strip="true" mjt.if="html">
+    <div class="content">${mjt.bless(html)}</div>
+  </span>
+  <span mjt.strip="true" mjt.elif="post_params">
+    <iframe src="about:blank" name="iframe-${timestamp}"></iframe>
+    <form class="post_form" action="${renderer_url}" method="post" target="iframe-${timestamp}" style="display:none;">
+      <input mjt.for="name,value in post_params" type="hidden" name="${name}" value="${(typeof value == 'object') ? JSON.stringify(value) : value}" />
+    </form>
+  </span>
+  <span mjt.strip="true" mjt.elif="url">
+    <span mjt.strip="true" mjt.if="params.proxied">
+      <span mjt.strip="true" mjt.if="params.defer">
+        <iframe deferred_src="${cleaning_proxy}?url=${mjt.formquote(url)}&amp;bust=${timestamp}"></iframe>
+      </span>
+      <span mjt.strip="true" mjt.else="">
+        <iframe src="${cleaning_proxy}?url=${mjt.formquote(url)}&amp;bust=${timestamp}"></iframe>
+      </span>
+    </span>
+    <span mjt.strip="true" mjt.else="">
+      <span mjt.strip="true" mjt.if="params.defer">
+        <iframe deferred_src="${url}"></iframe>
+      </span>
+      <span mjt.strip="true" mjt.else="">
+        <iframe src="${url}"></iframe>
+      </span>
+    </span>
+  </span>
+  <span mjt.strip="true" mjt.else="">
+    <div class="error">No url or html fragment can be found for this question</div>
+  </span>
+</span>
+
+<span mjt.strip="true" mjt.def="render_controls(buttons, question, params, training)">
+  <td mjt.if="!params.no_search" nowrap="">
+    <span mjt.script="">
+      var attrs = {};
+      var name = question.name;
+      if (name instanceof Array) name = name[0];
+      if (name && params.populate_search) {
+        attrs.value = name;
+      }
+      if ("topic_guid" in params) {
+        attrs.excluded_guid = params.topic_guid;
+      }
+    </span>
+    <div class="suggest">
+      <div><small>Search directly for a candidate &not;</small></div>
+      <div><input type="text" mjt.attrs="attrs"></div>
+    </div>
+  </td>
+  <span mjt.strip="true" mjt.for="b in buttons">
+    <td nowrap="" mjt.if="!training || (training && b.training)">
+      <button class="judgment button ${b.judgment}" judgment="${b.judgment}" style="${b.style || ''}" mjt.onclick="cast_judgment">${mjt.bless(b.markup)}</button>
+    </td>
+  </span>
+</span>
+
+<span mjt.strip="true" mjt.def="render_training_result(question)">
+  <div class="result hidden">
+    <h3 class="right_answer hidden">Correct!</h3>
+    <h3 class="wrong_answer hidden">Sorry, that was wrong</h3>
+    <div class="explanation" mjt.if="question.master_answer_explanation">${question.master_answer_explanation}</div>
+    <div class="buttons"><button>next &raquo;</button></div>
+  </div>
+</span>
+
+<span mjt.strip="true" mjt.def="topic_viewer(topic_id, params)">
+  <span mjt.script="">
+    var options = { 'mode' : 'standard' };
+    if ("as_of_time" in params) {
+      options["as_of_time"] = params["as_of_time"];
+    }
+    var topic = topics[topic_id];
+  </span>
+
+  <span mjt.strip="true" mjt.if="topic">
+    <div class="thumbnail" mjt.if="topic.thumbnail"><img src="${topic.thumbnail}"></div>
+    <h1><a href="http://www.freebase.com/view${topic.id}" target="_new">${topic.text}</a></h1>
+    <div class="types"><span mjt.for="i,t in topic.type"><span mjt.strip="true" mjt.if="i > 0">, </span>${t.text}</span></div>
+    <div class="alias" mjt.if="topic.alias.length > 0">Alias: <span mjt.for="i,a in topic.alias"><span mjt.strip="true" if="i > 0"> | </span>${a}</span></div>
+    <div class="description" mjt.if="topic.description">${topic.description.substring(0,400)}...</div>
+    <span mjt.strip="true" mjt.if="topic.webpage && topic.webpage.length > 0">
+      <div class="property">
+        <h2>Web Pages</h2>
+        <ul>
+          <li mjt.for="w in topic.webpage"><a href="${w.url}" target="_new">${w.text}</a></li>
+        </ul>
+      </div>
+    </span>
+    <span mjt.strip="true" mjt.for="p in topic.properties">
+      <div class="property">
+        <h2>${p.text}</h2>
+        <ul>
+          <li mjt.for="v in p.values"><a href="${v.url}" target="_new">${v.text}</a></li>
+        </ul>
+      </div>
+    </span>
+  </span>
+  <span mjt.strip="true" mjt.else="">
+    <div><code>${topic_id}</code> was not found</div>
+  </span>
+</span>
+
+<!-- End Templates -->
+
+
+
+    <div class="question">
+      <table class="skeleton">
+      <tr>
+        <td class="source_container">
+          <div class="source">
+            ${render_item(question, params)}
+          </div>
+        </td>
+
+        <td width="100%">
+
+          <div class="judgments" mjt.if="judgments">
+            <h4>Collected Judgments &not;</h4>
+            <ul>
+              <li mjt.for="j in judgments">${j.judgment} <a href="http://www.freebase.com/view${j.value}" mjt.if="j.value" target="_new">${j.value}</a> <a href="http://www.freebase.com/view${j.user_id}" class="decoration" target="_new">${j.user_id.split('/').pop()}</a> | <small>${j.time / 1000} seconds</small></li>
+            </ul>
+          </div>
+
+          <div class="controls">
+            <table>
+              <tr>
+                <td nowrap="">
+                  <div class="suggestion" mjt.if="candidates && candidates.length > 0">- <span class="message">${mjt.bless(message)}</span> &not;</div>
+                  <div class="suggestion" mjt.else="">- <span class="message">No candidates found</span></div>
+                </td>
+                ${render_controls(buttons, question, params, training)}
+              </tr>
+            </table>
+          </div>
+
+          <div mjt.if="training">${render_training_result(question)}</div>
+
+          <div class="candidates">
+            <table>
+              <tr>
+                <td mjt.for="i,c in candidates" mjt.if="i < max_candidates">
+                  <div class="candidate">
+                    <div class="candidate_body">
+                      <div class="selection ${selection}">
+                        <button mjt.if="selection == 'lax'" mjt.onclick="cast_judgment" class="judgment button close-match" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
+                        <button class="answer button match" mjt.onclick="cast_judgment" judgment="matches" value="${to_mid[c]}">${match_label}</button>
+                      </div>
+                    ${topic_viewer(c, topic_viewer_params)}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </div>
+        </td>
+      </tr>
+      </table>
+    </div>
+
+  </body>
+  <script type="text/javascript" charset="utf-8">
+    var question = {
+      key: "/authority/twitter/TomCruise",
+      task: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cgwLEgR0YXNrGIL9Ngw",
+      name: "Tom Cruise",
+      url: "http://en.wikipedia.org/wiki/Tom_Cruise",
+      candidates: [ "/en/tom_cruise" , "/m/01qm9tf" , "/m/068bp7t" ],
+      curiosity: "ahNzfmZyZWViYXNlLXJlZmluZXJ5cicLEgljdXJpb3NpdHkiGCs0YWZJVnZMZVhESjJDS2R2VGRPZVE9PQw"
+    }
+
+    var extra = {}; //NOTE: originally json strinfigying
+    var params = {
+      proxied : true
+    };
+    var configs = params;
+    var to_mid = {};
+    var topics = {};
+
+    //globals set in main and displayCandidates
+    var mode, max_vandidates, total_candidates, most_relevant_first, training, judgments, buttons, candidates, message, candidate_attrs;
+    var selection, lax_label, match_label, topic_viewer_params;
+
+    function acceptConfiguration(configs) {
+      params = configs;
+      mode = configs.mode || "recon";
+      max_candidates = params.max_candidates || 3;
+      total_candidates = params.total_candidates || 3;
+      most_relevant_first = (params.most_relevant_first && params.most_relevant_first == "true");
+      training = (params.training && params.training == "true");
+      judgments = params.judgments;
+    }
+
+    function freebaseSearch(query, options) {
+      options = options || {};
+      options.query = query;
+      return $.getJSON("https://www.googleapis.com/freebase/v1/search?callback=?", options);
+    }
+    function mqlRead(query) {
+      return $.getJSON("https://www.googleapis.com/freebase/v1/mqlread?callback=?", {query:JSON.stringify(query)});
+    }
+    function getTopic(id) {
+      return $.getJSON("http://api.freebase.com/api/experimental/topic/standard?callback=?", {id:id});
+    }
+
+    function main(q) {
+      question = q;
+
+      if (typeof question.candidates == "string") {
+        if (question.candidates == "") {
+          question.candidates = [];
+        } else {
+          question.candidates = [ question.candidates ];
+        }
+      }
+
+      if (typeof question.candidates == "undefined") {
+        question.candidates = [];
+      }
+
+      function search(query, options, onSuccess) {
+        if (!options) options = {};
+        query = query.replace(/"/g,'');
+        //NOTE(rictic): not supported in new freebase search api
+        options.type_strict = "SHOULD";
+        options.limit = total_candidates;
+        options.prefixed = true;
+        freebaseSearch(query, options).success(function(results) {
+            var candidates = [];
+            for (var i = 0; i < results.length; i++) {
+              candidates.push(results[i].id);
+            }
+          onSuccess(candidates);
+        });
+      }
+
+
+      var query = ("relevance_query" in question) ? question.relevance_query.query : question.name;
+      if (query) {
+        var options = ("relevance_query" in question && "options" in question.relevance_query) ? question.relevance_query.options : params.relevance_options;
+        search(query,options, handleNewCandidates);
+      } else {
+        handleNewCandidates([]);
+      }
+
+      //takes the new candidates, gets their mids, passes them along to handleCandidates
+      function handleNewCandidates(new_candidates) {
+        var candidates = new_candidates.concat(question.candidates);
+        var ids_to_convert = [];
+
+        // get mids for everything
+        for (var i = 0; i < candidates.length; i++) {
+          var c = candidates[i];
+          if (typeof c == "string") { // ignore candidates that are full objects
+            //we already know about this one
+            if (c in to_mid) continue;
+            if (c.indexOf("/m/") == 0) { // already a mid
+              to_mid[c] = c;
+            } else { // need to look up the mid
+              ids_to_convert.push(c);
+            }
+          }
+        }
+        getFreebaseInfo(candidates, ids_to_convert, function() {
+          displayCandidates(new_candidates);
+        });
+      }
+
+      //Takes a list of ids, calls onSuccess with an object that maps those ids to their mids.
+      function getFreebaseInfo(candidates, ids, onSuccess) {
+        for (var i = 0; i < ids.length; i++) {
+          mqlRead({
+            "mid": null,
+            "id": ids[i]
+          }).success(function(response) {
+            to_mid[response.result["id"]] = response.result["mid"];
+            responseReceived();
+          });
+        }
+
+        for (var i = 0; i < candidates.length; i++) {
+          (function(candidate) {
+            getTopic(candidates[i]).success(function(response) {
+              topics[candidate] = response[candidate].result;
+              responseReceived();
+            })
+          })(candidates[i])
+
+        }
+
+        var expected_responses = ids.length + candidates.length;
+        var received_responses = 0;
+        function responseReceived() {
+          received_responses++;
+          if (received_responses === expected_responses) {
+            onSuccess();
+          }
+        }
+      }
+    }
+
+    function displayCandidates(new_candidates) {
+      // dedupe new_candidates
+      var new_new_candidates = [];
+      for (var i = 0; i < new_candidates.length; i++) {
+        var new_cand = new_candidates[i];
+        var found = false;
+        for (var j = 0; j < question.candidates.length; j++) {
+          var existing_cand = question.candidates[j];
+          if (to_mid[new_cand] == to_mid[existing_cand]) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) new_new_candidates.push(to_mid[new_cand]);
+      }
+      new_candidates = new_new_candidates;
+
+      var how_many_new_candidates = (question.mix_in_candidates) ? question.mix_in_candidates : total_candidates - question.candidates.length;
+
+      if (how_many_new_candidates > 0) {
+        new_candidates = new_candidates.slice(0, how_many_new_candidates);
+      } else {
+        new_candidates = [];
+      }
+
+      question.candidates = question.candidates.concat(new_candidates);
+
+
+      // get the most relevant topic candidate
+      var most_relevant = new_candidates[0];
+
+      // get the mid of the most relevant topic
+      if (most_relevant) {
+        most_relevant = to_mid[most_relevant];
+      }
+
+      if (most_relevant_first && most_relevant) {
+        var cc = [ most_relevant ];
+        for (var i = 0; i < question.candidates.length; i++) {
+          var c = question.candidates[i];
+          if (c != most_relevant) {
+            cc.push(c);
+          }
+        }
+        question.candidates = cc;
+      }
+
+      if (mode == 'dupes') {
+        var topic_id = question.key;
+        if (topic_id) {
+          var cc = [];
+          for (var i = 0; i < question.candidates.length; i++) {
+            var c = question.candidates[i];
+            if (c != topic_id) {
+              cc.push(c);
+            }
+          }
+          question.candidates = cc;
+
+          //NOTE(rictic): known broken, use mqlRead, convert to async
+          params.topic_guid = acre.freebase.mqlread({
+            "id" : topic_id,
+            "guid" : null
+          }).result.guid;
+        }
+      }
+
+      if ("shuffle" in params && params.shuffle) {
+        question.candidates.sort(function () { // shuffle the candidates
+          return Math.round(Math.random()) - 0.5;
+        });
+      }
+
+      if ("buttons" in params) {
+        buttons = params.buttons;
+      } else {
+        buttons = mode_configs[mode].buttons;
+      }
+
+      if ("message" in params) {
+        message = params.message;
+      } else {
+        message = mode_configs[mode].message;
+      }
+
+      candidates = question.candidates;
+
+      extra = {
+        "displayed_candidates": candidates
+      };
+
+      topic_viewer_params =params.topic_viewer_params || {};
+
+      selection = params.selection || "strict"; // can be "strict" or "lax"
+      lax_label = params.lax_label || "Narrower/Broader";
+      match_label = params.match_label || "Match";
+
+      candidate_attrs = {};
+      if ("as_of_time" in question) {
+        candidate_attrs.as_of_time = question.as_of_time;
+      }
+      mjt.run();
+      init($(".question"));
+    }
+
+    function error(e, xhr, obj, errorThrown) {
+      try {
+        var msg = JSON.parse(xhr.responseText).message;
+        alert(msg);
+      } catch (e) {
+        var msg = xhr.responseText;
+        $("html").html(msg);
+      }
+    }
+
+    function cast_judgment(button) {
+      var judgment = button.attr("judgment");
+      var topic_id = button.attr("value");
+      var j = {
+        judgment : judgment,
+        extra : extra
+      };
+      j.extra.topic_id = topic_id;
+      Delphi.submitJudgment(j);
+    }
+
+    function load_topic(question, target, topic_id) {
+      var candidates = target.closest(".question").find(".candidates");
+      candidates.find("tr").prepend('<td><div class="candidate_placeholder"><div class="candidate"><img class="spinner" src="images/spinner.gif"></div></div></td>');
+      var placeholder = candidates.find(".candidate_placeholder:first");
+      load_candidate(question,placeholder,topic_id);
+    }
+
+    function prepare(placeholder) {
+      $(".candidate").removeClass("selected").hover(
+        function() {
+          $(".candidate").removeClass("selected");
+          $(this).addClass("selected");
+        },
+        function() {
+        }
+      );
+
+      placeholder.find(".candidate button").button().click(function() {
+        cast_judgment($(this));
+      });
+
+      $(".candidate:first").addClass("selected");
+
+      var max_height = 0;
+      placeholder.find(".candidate_body").each(function() {
+        var h = $(this).height();
+        if (h > max_height) max_height = h;
+      }).each(function() {
+        $(this).height(max_height + 30);
+        // 30 because the thumbnail is loaded asynchronously and might screw up the calculations
+        // so we add a little padding. Yeah, I know, it's a hack.
+
+        // also resize the source containers if needed
+        var h = $(document).height();
+        $(".source iframe").height(h);
+      });
+    };
+
+    function init(question) {
+      var suggest = question.find(".suggest input");
+      if (suggest.length > 0) {
+        var suggest_confs = {};
+        if (mode == 'dupes') {
+          var excluded_guid = suggest.attr("excluded_guid");
+          if (excluded_guid) {
+            suggest_confs.exclude_guids = excluded_guid;
+          }
+        }
+        suggest.suggest(suggest_confs).bind("fb-select", function(e, data) {
+          load_topic(question,$(this),data.id);
+        });
+      }
+
+      question.find("button::visible").button().click(function() {
+        cast_judgment($(this));
+      })
+    }
+
+    $(function() {
+      $("body").ajaxError(error);
+    })
+  </script>
+  <script src="/client/delphi.js" type="text/javascript"></script>
+</html>

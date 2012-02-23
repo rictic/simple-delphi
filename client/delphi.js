@@ -68,7 +68,7 @@ delphiJQuery(document).ready(function() {
         callClient("preloadQuestion", window.question);
         callClient("main", window.question);
       } else {
-        alert("There are no 'question' and 'params' object to test the app with");
+        alert("There are no 'question' and 'configs' object to test the app with");
       }
     }
   } else {

@@ -1,0 +1,245 @@
+body {
+  margin: 0;
+}
+
+.question {
+  margin: 0;
+  padding: 0;
+}
+
+.skeleton {
+  width: 100%;
+}
+
+.controls {
+  margin: 0.5em;
+  padding-bottom: 0.3em;
+  text-align: left;
+}
+.controls td {
+  padding-right: 1em;
+  vertical-align: bottom;
+}
+
+.topic {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  padding: 0.5em;
+}
+
+.topic iframe {
+  border: 1px solid #ccc;
+  width: 100%;
+}
+
+.source_container {
+  border-right: 1px solid #ccc;
+}
+
+.source {
+  min-width: 500px;
+  background-color: #fff;
+}
+
+.source h1 {
+  margin: 0;
+  padding: 0;
+  padding-left: 4px;
+  font-size: 140%;
+}
+
+.source .tags {
+  color: #888;
+  font-size: 90%;
+  padding-left: 4px;
+  font-family: tahoma;
+}
+
+.source .description {
+  color: #888;
+  font-size: 90%;
+  padding-left: 4px;
+  font-family: tahoma;
+}
+
+.source iframe {
+  border: 0px;
+  width: 640px;
+  height: 800px;
+  border-top: 1px solid #ddd;
+}
+
+.source .content {
+  width: 300px;
+}
+
+.source .error {
+  margin: 1em;
+  padding: 1em;
+  border: 1px solid #ccc;
+  border-radius: 0.5em;
+  font-size: 110%;
+  font-family: tahoma;
+  color: #666;
+}
+
+.suggestion {
+  color: #666;
+}
+
+.new_topic {
+  -moz-border-radius: 0.4em;
+  -webkit-border-radius: 0.4em;
+  border: 1px solid #CCCCCC;
+  padding: 0.6em 0.6em 0.4em 0.4em;
+}
+
+.suggest {
+  -moz-border-radius: 0.4em;
+  -webkit-border-radius: 0.4em;
+  border: 1px solid #CCCCCC;
+  padding: 0.3em 0.6em 0.6em 0.6em;
+}
+
+.candidates {
+  margin: 0.5em 0 0.5em 0.5em;
+  padding: 0.5em;
+  background-color: #f4f8fb;
+  border: 1px solid #C7DDFF;
+  border-right: 0;
+  -moz-border-radius-topleft: 1em;
+  -webkit-border-top-left-radius: 1em;
+  -moz-border-radius-bottomleft: 1em;
+  -webkit-border-bottom-left-radius: 1em;
+}
+
+.candidate {
+  position: relative;
+}
+
+.candidate .score {
+  font-size: 80%;
+  text-align: center;
+  font-family: verdana;
+  color: #666;
+}
+
+.candidate_body {
+  background-image: url("images/freebase_logo_gray.png");
+  background-repeat: no-repeat;
+  background-position: 5px 5px;
+  width: 248px;
+  border: 1px solid #ccc;
+  -moz-border-radius: 0.7em;
+  -webkit-border-radius: 0.7em;
+  margin: 0em;
+  margin-right: 0.3em;
+  padding: 0.5em;
+}
+.candidate .selection {
+  text-align: right;
+  visibility: hidden;
+}
+.candidate h1 {
+  font-size: 130%;
+}
+.candidate .types {
+  color: #888;
+  font-size: 90%;
+  font-family: "tahoma";
+}
+.candidate .alias {
+  font-size: 90%;
+  font-family: "tahoma";
+  color: #555;
+  margin: 1em 0em;
+}
+.candidate .thumbnail {
+  float: left;
+  padding: 0.5em 0.5em 0em 0em;
+}
+.candidate .description {
+  margin: 0.5em 0em;
+  font-size: 90%;
+}
+.candidate hr {
+  width: 50%;
+  border: 1px solid #ccc;
+}
+.candidate .property {
+  margin: 0.5em 0em;
+}
+.candidate .property h2 {
+  font-size: 105%;
+  font-weight: normal;
+}
+.candidate .property ul {
+  margin: 0px;
+  padding-left: 1em;
+}
+.candidate .property li {
+  list-style: none;
+}
+
+.candidate.selected .candidate_body {
+  border: 1px solid #FF7711;
+  background-color: #fff;
+  background-image: url("images/freebase_logo_orange.png");
+}
+.candidate.selected .selection {
+  visibility: visible;
+}
+.candidate.selected .score {
+  color: #FF7711;
+}
+
+.training {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  -moz-border-radius: 1em;
+  -webkit-border-radius: 1em;
+  margin-top: 0.5em;
+  padding: 0.5em;
+}
+
+.result {
+  margin: 1em;
+  padding: 1em;
+  border: 1px solid #ccc;
+  -moz-border-radius: 1em;
+  -webkit-border-radius: 1em;
+  background-color: #f8f8f8;
+}
+
+.result .explanation {
+  padding: 1em 0em;
+}
+
+.right_answer {
+  color: #008800;
+}
+
+.wrong_answer {
+  color: #880000;
+}
+
+.decoration {
+  font-size:  70%;
+  position: relative;
+  bottom: 0.7em;
+  color: #888;
+}
+
+.spinner {
+  margin: 2em 6em;
+}
+
+.spinner img {
+  height: 32px;
+  width: 32px;
+}
+
+.training_result {
+  width: 50%;
+  margin: 0em auto;
+}
