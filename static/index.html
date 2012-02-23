@@ -219,9 +219,16 @@
             console.error("app is just a string...");
             result.app = {name: result.app};
           }
+          var app_url_map = {
+            matchmaker_recon: "/apps/matchmaker/index.html"
+          }
           if (!result.app.url) {
-            console.error("App given by refinery doesn't have a url, filling in dummy...");
-            result.app.url = "/apps/dummy/index.html"
+            if (result.app.name in app_url_map) {
+              result.app.url = app_url_map[result.app.name];
+            } else {
+              console.error("App given by refinery doesn't have a url, filling in dummy...");
+              result.app.url = "/apps/dummy/index.html"
+            }
           }
           callback(data.result);
         });
