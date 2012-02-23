@@ -98,5 +98,5 @@ app = webapp2.WSGIApplication([
     ("/apis/submit_judgment", SubmitJudgment),
     ("/apis/signout", Signout),
     ("/apis/echo", Echo),
-    ("/", RedirectToIndex)
+    ("/", RedirectToIndex),
     ], debug=util.in_development)
