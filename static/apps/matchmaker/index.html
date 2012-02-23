@@ -90,7 +90,7 @@
   </td>
   <span mjt.strip="true" mjt.for="b in buttons">
     <td nowrap="" mjt.if="!training || (training && b.training)">
-      <button class="judgment button ${b.judgment}" judgment="${b.judgment}" style="${b.style || ''}">${mjt.bless(b.markup)}</button>
+      <button class="judgment button ${b.judgment}" judgment="${b.judgment}" style="${b.style || ''}" onclick="cast_judgment">${mjt.bless(b.markup)}</button>
     </td>
   </span>
 </span>
@@ -184,8 +184,8 @@
                   <div class="candidate">
                     <div class="candidate_body">
                       <div class="selection ${selection}">
-                        <button mjt.if="selection == 'lax'" class="judgment button close-match" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
-                        <button class="answer button match" judgment="matches" value="${to_mid[c]}">${match_label}</button>
+                        <button mjt.if="selection == 'lax'" onclick="cast_judgment" class="judgment button close-match" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
+                        <button class="answer button match" onclick="cast_judgment" judgment="matches" value="${to_mid[c]}">${match_label}</button>
                       </div>
                     ${topic_viewer(c, topic_viewer_params)}
                     </div>
@@ -473,14 +473,6 @@
       load_candidate(question,placeholder,topic_id);
     }
 
-    function load_candidate(question,placeholder,topic_id,as_of_time) {
-      // placeholder.load("candidate", {
-      //   params : JSON.stringify(data)
-      // }, function() {
-      //   prepare(placeholder);
-      // });
-    }
-
     function prepare(placeholder) {
       $(".candidate").removeClass("selected").hover(
         function() {
@@ -513,14 +505,6 @@
     };
 
     function init(question) {
-      question.find(".post_form").submit();
-
-      question.find(".candidate_placeholder").each(function(i) {
-        var topic_id = $(this).attr("topic_id");
-        var as_of_time = $(this).attr("as_of_time");
-        load_candidate(question,$(this),topic_id,as_of_time);
-      });
-
       var suggest = question.find(".suggest input");
       if (suggest.length > 0) {
         var suggest_confs = {};
