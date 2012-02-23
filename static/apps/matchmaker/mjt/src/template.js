@@ -2,7 +2,7 @@
  *  platform-independent (minimal) runtime system required
  *  by compiled templates.
  *  includes some commonly needed auxillary functions for users.
- * 
+ *
  */
 
 (function(mjt){
@@ -252,7 +252,7 @@ mjt.TemplateCall.prototype.display = function (target_id) {
     }
 
     // special handling if top is an iframe: write into
-    // the document body inside the iframe rather than 
+    // the document body inside the iframe rather than
     // the iframe tag itself.
     if (top.nodeName == 'IFRAME') {
         var idoc = (top.contentWindow || top.contentDocument);
