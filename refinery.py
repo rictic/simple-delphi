@@ -14,3 +14,6 @@ def get_groups(user):
   }
   return refinery.get("/get_contributor_tasks", params)["tasks"]
 
+def get_task_details(task):
+  return refinery.get("/get_task_details", {"task_unguessable_id": task})
+
