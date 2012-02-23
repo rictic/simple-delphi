@@ -90,7 +90,7 @@
   </td>
   <span mjt.strip="true" mjt.for="b in buttons">
     <td nowrap="" mjt.if="!training || (training && b.training)">
-      <button class="judgment button ${b.judgment}" judgment="${b.judgment}" style="${b.style || ''}" onclick="cast_judgment">${mjt.bless(b.markup)}</button>
+      <button class="judgment button ${b.judgment}" judgment="${b.judgment}" style="${b.style || ''}" mjt.onclick="cast_judgment">${mjt.bless(b.markup)}</button>
     </td>
   </span>
 </span>
@@ -184,8 +184,8 @@
                   <div class="candidate">
                     <div class="candidate_body">
                       <div class="selection ${selection}">
-                        <button mjt.if="selection == 'lax'" onclick="cast_judgment" class="judgment button close-match" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
-                        <button class="answer button match" onclick="cast_judgment" judgment="matches" value="${to_mid[c]}">${match_label}</button>
+                        <button mjt.if="selection == 'lax'" mjt.onclick="cast_judgment" class="judgment button close-match" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
+                        <button class="answer button match" mjt.onclick="cast_judgment" judgment="matches" value="${to_mid[c]}">${match_label}</button>
                       </div>
                     ${topic_viewer(c, topic_viewer_params)}
                     </div>
