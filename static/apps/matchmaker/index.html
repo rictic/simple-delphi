@@ -104,6 +104,43 @@
   </div>
 </span>
 
+<span mjt.strip="true" mjt.def="topic_viewer(topic_id, params)">
+  <span mjt.script="">
+    var options = { 'mode' : 'standard' };
+    if ("as_of_time" in params) {
+      options["as_of_time"] = params["as_of_time"];
+    }
+    var topic = topics[topic_id];
+  </span>
+
+  <span mjt.strip="true" mjt.if="topic">
+    <div class="thumbnail" mjt.if="topic.thumbnail"><img src="${topic.thumbnail}"></div>
+    <h1><a href="http://www.freebase.com/view${topic.id}" target="_new">${topic.text}</a></h1>
+    <div class="types"><span mjt.for="i,t in topic.type"><span mjt.strip="true" mjt.if="i > 0">, </span>${t.text}</span></div>
+    <div class="alias" mjt.if="topic.alias.length > 0">Alias: <span mjt.for="i,a in topic.alias"><span mjt.strip="true" if="i > 0"> | </span>${a}</span></div>
+    <div class="description" mjt.if="topic.description">${topic.description.substring(0,400)}...</div>
+    <span mjt.strip="true" mjt.if="topic.webpage && topic.webpage.length > 0">
+      <div class="property">
+        <h2>Web Pages</h2>
+        <ul>
+          <li mjt.for="w in topic.webpage"><a href="${w.url}" target="_new">${w.text}</a></li>
+        </ul>
+      </div>
+    </span>
+    <span mjt.strip="true" mjt.for="p in topic.properties">
+      <div class="property">
+        <h2>${p.text}</h2>
+        <ul>
+          <li mjt.for="v in p.values"><a href="${v.url}" target="_new">${v.text}</a></li>
+        </ul>
+      </div>
+    </span>
+  </span>
+  <span mjt.strip="true" mjt.else="">
+    <div><code>${topic_id}</code> was not found</div>
+  </span>
+</span>
+
 <!-- End Templates -->
 
 
@@ -144,7 +181,15 @@
             <table>
               <tr>
                 <td mjt.for="i,c in candidates" mjt.if="i < max_candidates">
-                  <div class="candidate_placeholder" topic_id="${c}" mjt.attrs="candidate_attrs"><div class="spinner"><img src="images/spinner.gif"></div></div>
+                  <div class="candidate">
+                    <div class="candidate_body">
+                      <div class="selection ${selection}">
+                        <button mjt.if="selection == 'lax'" class="judgment button close-match" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
+                        <button class="answer button match" judgment="matches" value="${to_mid[c]}">${match_label}</button>
+                      </div>
+                    ${topic_viewer(c, topic_viewer_params)}
+                    </div>
+                  </div>
                 </td>
               </tr>
             </table>
@@ -170,7 +215,12 @@
       proxied : true
     };
     var configs = params;
+    var to_mid = {};
+    var topics = {};
+
+    //globals set in main and displayCandidates
     var mode, max_vandidates, total_candidates, most_relevant_first, training, judgments, buttons, candidates, message, candidate_attrs;
+    var selection, lax_label, match_label, topic_viewer_params;
 
     function acceptConfiguration(configs) {
       params = configs;
@@ -189,6 +239,9 @@
     }
     function mqlRead(query) {
       return $.getJSON("https://www.googleapis.com/freebase/v1/mqlread?callback=?", {query:JSON.stringify(query)});
+    }
+    function getTopic(id) {
+      return $.getJSON("http://api.freebase.com/api/experimental/topic/standard?callback=?", {id:id});
     }
 
     function main(q) {
@@ -234,52 +287,60 @@
       //takes the new candidates, gets their mids, passes them along to handleCandidates
       function handleNewCandidates(new_candidates) {
         var candidates = new_candidates.concat(question.candidates);
-        var mids = [];
         var ids_to_convert = [];
 
         // get mids for everything
         for (var i = 0; i < candidates.length; i++) {
           var c = candidates[i];
           if (typeof c == "string") { // ignore candidates that are full objects
+            //we already know about this one
+            if (c in to_mid) continue;
             if (c.indexOf("/m/") == 0) { // already a mid
-              mids.push(c);
+              to_mid[c] = c;
             } else { // need to look up the mid
               ids_to_convert.push(c);
             }
           }
         }
-        getIdToMidMapping(ids_to_convert, function(mapping) {
-          for (var i = 0; i < mids.length; i++)
-            mapping[mids[i]] = mids[i];;
-          displayCandidates(new_candidates, mapping);
+        getFreebaseInfo(candidates, ids_to_convert, function() {
+          displayCandidates(new_candidates);
         });
       }
 
       //Takes a list of ids, calls onSuccess with an object that maps those ids to their mids.
-      function getIdToMidMapping(ids, onSuccess) {
-        var mapping = {};
+      function getFreebaseInfo(candidates, ids, onSuccess) {
         for (var i = 0; i < ids.length; i++) {
           mqlRead({
             "mid": null,
             "id": ids[i]
           }).success(function(response) {
-            mapping[response.result["id"]] = response.result["mid"];
+            to_mid[response.result["id"]] = response.result["mid"];
             responseReceived();
           });
         }
 
-        var expected_responses = ids.length;
+        for (var i = 0; i < candidates.length; i++) {
+          (function(candidate) {
+            getTopic(candidates[i]).success(function(response) {
+              topics[candidate] = response[candidate].result;
+              responseReceived();
+            })
+          })(candidates[i])
+
+        }
+
+        var expected_responses = ids.length + candidates.length;
         var received_responses = 0;
         function responseReceived() {
           received_responses++;
           if (received_responses === expected_responses) {
-            onSuccess(mapping);
+            onSuccess();
           }
         }
       }
     }
 
-    function displayCandidates(new_candidates, mids) {
+    function displayCandidates(new_candidates) {
       // dedupe new_candidates
       var new_new_candidates = [];
       for (var i = 0; i < new_candidates.length; i++) {
@@ -287,12 +348,12 @@
         var found = false;
         for (var j = 0; j < question.candidates.length; j++) {
           var existing_cand = question.candidates[j];
-          if (mids[new_cand] == mids[existing_cand]) {
+          if (to_mid[new_cand] == to_mid[existing_cand]) {
             found = true;
             break;
           }
         }
-        if (!found) new_new_candidates.push(mids[new_cand]);
+        if (!found) new_new_candidates.push(to_mid[new_cand]);
       }
       new_candidates = new_new_candidates;
 
@@ -312,7 +373,7 @@
 
       // get the mid of the most relevant topic
       if (most_relevant) {
-        most_relevant = mids[most_relevant];
+        most_relevant = to_mid[most_relevant];
       }
 
       if (most_relevant_first && most_relevant) {
@@ -370,6 +431,12 @@
         "displayed_candidates": candidates
       };
 
+      topic_viewer_params =params.topic_viewer_params || {};
+
+      selection = params.selection || "strict"; // can be "strict" or "lax"
+      lax_label = params.lax_label || "Narrower/Broader";
+      match_label = params.match_label || "Match";
+
       candidate_attrs = {};
       if ("as_of_time" in question) {
         candidate_attrs.as_of_time = question.as_of_time;
@@ -412,40 +479,6 @@
       // }, function() {
       //   prepare(placeholder);
       // });
-
-      var selection = params.selection || "strict"; // can be "strict" or "lax"
-      var lax_label = params.lax_label || "Narrower/Broader";
-      var match_label = params.match_label || "Match";
-
-      var topic_viewer_path = params.topic_viewer_path || "topic_viewer";
-      var topic_viewer_params = params.topic_viewer_params || {};
-
-      //var topic_viewer = acre.require(topic_viewer_path);
-
-      // lookup the MID of the entity in freebase if it's not already a MID
-      if (topic_id.indexOf("/m/") !== 0) {
-        mqlRead({ id : topic_id, mid : null }).success(function(response) {
-          continueCandidate(response.result.mid);
-        });
-      } else {
-        continueCandidate(topic_id)
-      }
-
-      function continueCandidate(topic_id) {
-
-      }
-
-      // <div class="candidate">
-      //   <div class="candidate_body">
-      //     <div class="selection ${selection}">
-      //       <button acre:if="selection == 'lax'" class="judgment button close-match" judgment="close_matches" value="${topic_id}">${lax_label}</button>
-      //       <button class="answer button match" judgment="matches" value="${topic_id}">${match_label}</button>
-      //     </div>
-      //     ${topic_viewer.content(topic_id, topic_viewer_params)}
-      //   </div>
-      // </div>
-
-
     }
 
     function prepare(placeholder) {
