@@ -12,11 +12,15 @@ def json_responder(wrapped):
     #TODO(rictic): HTTP error handling
     result = wrapped(self, *args, **kwargs)
     self.response.headers["Content-Type"] = "application/json"
+    if self.cache_time is not None:
+      self.response.headers["Cache-Control"] = ("max-age=%i, private"
+          % self.cache_time)
     json.dump({"result": result}, self.response.out, indent=2)
   return wrapper
 
 
 class Base(webapp2.RequestHandler):
+  cache_time = None
   def require_params(self, params):
     values = []
     for param in params:
@@ -27,12 +31,15 @@ class Base(webapp2.RequestHandler):
 
 
 class GetGroups(Base):
+  cache_time = 60 * 5
   @json_responder
   def get(self):
     return refinery.get_groups(users.get_current_user())
 
 
+
 class GetTaskDetails(Base):
+  cache_time = 60 * 5
   @json_responder
   def get(self):
     task, = self.require_params(["unguessable_id"])
