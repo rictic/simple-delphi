@@ -378,16 +378,18 @@
       var question_id = question.question_id;
       var session_id = question_to_session[question_id]
 
-      $.post("/apis/submit_judgment",{
-        "session_id" : session_id,
-        "question_id" : question_id,
-        "timecost" : now() - push_question_time,
-        "judgment" : JSON.stringify(judgment)
-      }).success(function(data) {
-        next_question();
-      }).error(function(data) {
-        alert("error submitting judgment: " + JSON.stringify(data));
-      });
+      next_question();
+      // FIXME(rictic)
+      // $.post("/apis/submit_judgment",{
+      //   "session_id" : session_id,
+      //   "question_id" : question_id,
+      //   "timecost" : now() - push_question_time,
+      //   "judgment" : JSON.stringify(judgment)
+      // }).success(function(data) {
+      //   next_question();
+      // }).error(function(data) {
+      //   alert("error submitting judgment: " + JSON.stringify(data));
+      // });
     }
 
     function keep_sessions_alive() {
