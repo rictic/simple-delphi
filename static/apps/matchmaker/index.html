@@ -245,7 +245,7 @@
     }
 
     function main(q) {
-      question = q;
+      question = q.payload;
 
       if (typeof question.candidates == "string") {
         if (question.candidates == "") {
@@ -331,6 +331,9 @@
 
         var expected_responses = ids.length + candidates.length;
         var received_responses = 0;
+        if (expected_responses === 0) {
+          onSuccess();
+        }
         function responseReceived() {
           received_responses++;
           if (received_responses === expected_responses) {
@@ -505,6 +508,8 @@
     };
 
     function init(question) {
+      question.find(".post_form").submit();
+
       var suggest = question.find(".suggest input");
       if (suggest.length > 0) {
         var suggest_confs = {};
