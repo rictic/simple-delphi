@@ -173,79 +173,45 @@
       });
     }
 
-    //NOTE: only handles callback functions that take either 0 or 1 arg
-    function cache_function(ttl, f) {
-      function cached() {
-        var args = Array.prototype.slice.call(arguments);
-        var continuation = args.pop();
-        var key = "";
-        if (args.length > 1 || (args.length === 1 && typeof args[0] !== "string")) {
-          throw new Error("unable to cache a function of >1 arg or nonstring args");
-        } else if (args.length === 1) {
-          key = args[0];
+    function get_group_details(group, callback) {
+      $.getJSON("/apis/get_task_details", {unguessable_id: group}).success(function(data) {
+        if (!("result" in data)) {
+          alert("error getting task details, got invalid response");
+          return;
         }
-        var cv = cached.cache[key];
-        if (!cv || now() > cv.valid_until) {
-          f.apply(null, args.concat([
-            function(result) {
-              cached.cache[key] = {
-                valid_until: now() + ttl,
-                value: result
-              };
-              continuation(result);
-            }
-          ]));
-        } else {
-          continuation(cv.value);
+        var result = data.result;
+        if (!result.configurations) {
+          result.configurations = {};
         }
-      }
-      cached.cache = {};
-      return cached;
+        result.configurations.proxied = true
+        if (typeof result.app === "string") {
+          console.error("app is just a string...");
+          result.app = {name: result.app};
+        }
+        var app_url_map = {
+          matchmaker_recon: "/apps/matchmaker/index.html"
+        }
+        if (!result.app.url) {
+          if (result.app.name in app_url_map) {
+            result.app.url = app_url_map[result.app.name];
+          } else {
+            console.error("App given by refinery doesn't have a url, filling in dummy...");
+            result.app.url = "/apps/dummy/index.html"
+          }
+        }
+        callback(data.result);
+      });
     }
-
-    var get_group_details = cache_function(1000 * 60 * 5,
-      function actual_get_group_details(group, callback) {
-        $.getJSON("/apis/get_task_details", {unguessable_id: group}).success(function(data) {
-          if (!("result" in data)) {
-            alert("error getting task details, got invalid response");
-            return;
-          }
-          var result = data.result;
-          if (!result.configurations) {
-            result.configurations = {};
-          }
-          result.configurations.proxied = true
-          if (typeof result.app === "string") {
-            console.error("app is just a string...");
-            result.app = {name: result.app};
-          }
-          var app_url_map = {
-            matchmaker_recon: "/apps/matchmaker/index.html"
-          }
-          if (!result.app.url) {
-            if (result.app.name in app_url_map) {
-              result.app.url = app_url_map[result.app.name];
-            } else {
-              console.error("App given by refinery doesn't have a url, filling in dummy...");
-              result.app.url = "/apps/dummy/index.html"
-            }
-          }
-          callback(data.result);
-        });
-      }
-    )
-
-    var get_groups = cache_function(1000 * 60 * 5,
-      function fetch_groups(callback) {
-        $.getJSON("/apis/get_groups").success(function(data) {
-          if (!("result" in data) || !$.isArray(data.result)) {
-            alert("error getting groups, got invalid response");
-            return;
-          }
-          callback(data.result);
-        });
-      }
-    );
+    
+    function get_groups(callback) {
+      $.getJSON("/apis/get_groups").success(function(data) {
+        if (!("result" in data) || !$.isArray(data.result)) {
+          alert("error getting groups, got invalid response");
+          return;
+        }
+        callback(data.result);
+      });
+    }
 
     /**
      * Given a list of groups, returns one of them to fetch questions for.
