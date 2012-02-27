@@ -37,6 +37,7 @@
     var iframe_hight, iframe_width;
     var iframe_padding = 5;
     var iframe_border = 1;
+    var first_question = true;
 
     function log(o) {
       if (typeof console !== "undefined" && log_enabled) {
@@ -120,6 +121,8 @@
           type: "acceptConfiguration",
           data: params
         });
+        hide_activity();
+        show_app();
         submit();
       });
     }
@@ -127,6 +130,7 @@
     var group_to_session = {};
     function get_session_for_group(group, continuation) {
       if (!(group in group_to_session)) {
+        show_activity("Starting session...");
         $.getJSON("/apis/start_session?group=" + group).success(function(data) {
           if ("result" in data && "session_id" in data.result) {
             group_to_session[group] = data.result.session_id;
@@ -143,8 +147,7 @@
     }
 
     var question_to_session = {};
-    function get_question(session_id, continuation, message) {
-      show_activity(message || "Loading question...");
+    function get_question(session_id, continuation) {
       $.getJSON("/apis/get_question", {
         "session_id" : session_id
       }).success(function(data) {
@@ -201,6 +204,7 @@
     }
     
     function get_groups(callback) {
+      show_activity("Getting assignment...");
       $.getJSON("/apis/get_groups").success(function(data) {
         if (!("result" in data) || !$.isArray(data.result)) {
           alert("error getting groups, got invalid response");
@@ -266,16 +270,12 @@
 
     var no_work_available = false;
     function log_no_question_received_for_group(group) {
-      if (!no_work_available) {
-        show_activity("Still working...");
-      }
       var gmeta = groups_metadata[group];
       gmeta.unsuccessful_streak++;
       gmeta.began_unsuccessful_streak_at = undefined;
     }
 
     function log_question_received_for_group(group) {
-      hide_activity();
       var gmeta = groups_metadata[group];
       gmeta.unsuccessful_streak = 0;
       if (gmeta.began_unsuccessful_streak_at === undefined) {
@@ -303,6 +303,12 @@
 
         var group = choose_group(groups);
         get_session_for_group(group, function(session_id) {
+          if (first_question) {
+            show_activity("Loading question (the first one takes a bit)...");
+          } else {
+            show_activity("Loading question...");
+          }
+          
           get_question(session_id, function(question) {
             if (question === null) {
               log_no_question_received_for_group(group);
@@ -310,11 +316,11 @@
               return;
             }
 
+            first_question = false;
             log_question_received_for_group(group, question);
             if (group !== prev_group) {
               on_context_switch();
             }
-            show_app();
             get_group_details(group, function(task_details) {
               console.log(task_details);
               push_question(task_details.app, question, task_details.configurations);
