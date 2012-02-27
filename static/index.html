@@ -89,7 +89,7 @@
 
     function push_question(app,question,params) {
       push_question_time = now();
-      
+
       var submit = function() {
         log("submitted question to the app");
         pm({
@@ -112,7 +112,7 @@
       var app_window = app_frame[0].contentWindow; //must be done after frame is in DOM
       resize();
       log("loading app from: " + app.url);
-      
+
       pm.bind("ready", function() {
         log("app is ready, let's roll");
         pm({
