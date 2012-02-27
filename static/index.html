@@ -6,18 +6,23 @@
   <link href="css/freebase.ui.mf.css" rel="stylesheet">
   <link href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/ui-lightness/jquery-ui.css" rel="stylesheet">
   <link href="css/delphi.css" rel="stylesheet">
-
 </head>
 <body>
 
   <div>
     <div id="activity" class="message hidden"><span class="text"></span> <img src="/images/spinner.gif"></div>
 
-    <iframe id="app" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
+    <div id="app_area" class="hidden">
+
+    </div>
 
     <div id="end" class="message hidden">There are no more questions for you at this time</div>
 
     <div id="dialog_message" class="hidden"></div>
+
+    <div id="toClone" class="hidden">
+      <iframe class="app" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
+    </div>
   </div>
 
   <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript"></script>
@@ -28,9 +33,6 @@
     var log_enabled = true;
 
     var push_question_time = 0;
-
-    var question_count = 0;
-    var forceful_reload_count = 100;
 
     var iframe_hight, iframe_width;
     var iframe_padding = 5;
@@ -57,11 +59,11 @@
     }
 
     function show_app() {
-      $("#app").show();
+      $("#app_area").show();
     }
 
     function hide_app() {
-      $("#app").hide();
+      $("#app_area").hide();
     }
 
     function end() {
@@ -70,7 +72,7 @@
     }
 
     function resize() {
-      var frame = $("#app");
+      var frame = $("#app_area .app");
 
       var h = $(document).height() - $("#header").outerHeight(true) - $("#extra").outerHeight(true) - $("#footer").outerHeight(true) - (2 * iframe_padding) - (2 * iframe_border);
       if (!isNaN(h) && (h > 0) && (h !== iframe_hight)) {
@@ -87,44 +89,39 @@
 
     function push_question(app,question,params) {
       push_question_time = now();
-      var app_frame = $("#app");
-      var current_app_url = app_frame.attr("src");
-
+      
       var submit = function() {
         log("submitted question to the app");
         pm({
-          target: window.frames["app"],
+          target: app_window,
           type: "preloadQuestion",
           data: question
         });
         pm({
-          target: window.frames["app"],
+          target: app_window,
           type: "question",
           data: question
         });
-        question_count++;
       }
 
-      // Here we act defensively and force the delphi app
-      // embedded in the iframe to be reloaded every once in a while
-      // to make sure that if there are any leaks or degradations
-      // it won't generate weird behavior that would be hard to debug later
-      if ((current_app_url != app.url) || (question_count % forceful_reload_count == 0)) {
-        log("loading app from: " + app.url);
-        question_count = 0;
-        $("#app").attr("src", app.url);
-        pm.bind("ready", function() {
-          log("app is ready, let's roll");
-          pm({
-            target: window.frames["app"],
-            type: "acceptConfiguration",
-            data: params
-          });
-          submit();
+      //currently we reload the app for every question into a new iframe
+      var app_frame = $("#toClone").find(".app").clone();
+      app_frame.attr("src", app.url);
+      $("#app_area").empty().append(app_frame);
+      iframe_width = undefined; iframe_height = undefined;
+      var app_window = app_frame[0].contentWindow; //must be done after frame is in DOM
+      resize();
+      log("loading app from: " + app.url);
+      
+      pm.bind("ready", function() {
+        log("app is ready, let's roll");
+        pm({
+          target: app_window,
+          type: "acceptConfiguration",
+          data: params
         });
-      } else {
         submit();
-      }
+      });
     }
 
     var group_to_session = {};
@@ -318,7 +315,6 @@
               on_context_switch();
             }
             show_app();
-            resize();
             get_group_details(group, function(task_details) {
               console.log(task_details);
               push_question(task_details.app, question, task_details.configurations);
