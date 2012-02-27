@@ -173,6 +173,9 @@
       });
     }
 
+    var app_url_map = {
+      matchmaker_recon: "/apps/matchmaker/index.html"
+    }
     function get_group_details(group, callback) {
       $.getJSON("/apis/get_task_details", {unguessable_id: group}).success(function(data) {
         if (!("result" in data)) {
@@ -187,9 +190,6 @@
         if (typeof result.app === "string") {
           console.error("app is just a string...");
           result.app = {name: result.app};
-        }
-        var app_url_map = {
-          matchmaker_recon: "/apps/matchmaker/index.html"
         }
         if (!result.app.url) {
           if (result.app.name in app_url_map) {
@@ -208,6 +208,10 @@
         if (!("result" in data) || !$.isArray(data.result)) {
           alert("error getting groups, got invalid response");
           return;
+        }
+        //warm up the cache
+        for(var i = 0; i < data.result.length; i++) {
+          get_group_details(data.result[i], function(){});
         }
         callback(data.result);
       });

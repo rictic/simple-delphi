@@ -114,4 +114,4 @@ app = webapp2.WSGIApplication([
     ("/apis/signout", Signout),
     ("/apis/echo", Echo),
     ("/", RedirectToIndex),
-    ], debug=util.in_development)
+    ])
