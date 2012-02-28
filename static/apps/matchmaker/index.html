@@ -89,12 +89,13 @@
     </div>
 
     <span mjt.script="ondomready">
-      var suggest = $(".question").find(".suggest input");
       $(".controls").find("button::visible").button().click(function() {
         cast_judgment($(this));
       });
       console.log(suggest);
-      if (suggest.length > 0) {
+      var suggest = $(".question").find(".suggest input");
+      if (!suggest.hasClass("handled")) {
+        suggest.addClass("handled");
         var suggest_confs = {};
         if (mode == 'dupes') {
           var excluded_guid = suggest.attr("excluded_guid");
