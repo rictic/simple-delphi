@@ -138,7 +138,7 @@ body {
 }
 .candidate .selection {
   text-align: right;
-  visibility: hidden;
+  /*visibility: hidden;*/
 }
 .candidate h1 {
   font-size: 130%;
