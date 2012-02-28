@@ -147,9 +147,16 @@
     }
 
     var question_to_session = {};
+    var session_to_questions = {};
     function get_question(session_id, continuation) {
+      if (!(session_id in session_to_questions)) {
+        session_to_questions[session_id] = [];
+      }
+      var cached_questions = session_to_questions[session_id];
+
       $.getJSON("/apis/get_question", {
-        "session_id" : session_id
+        "session_id" : session_id,
+        "num" : 5
       }).success(function(data) {
         if ("result" in data && "question_batch" in data.result) {
           var questions = data.result.question_batch;
@@ -202,7 +209,7 @@
         callback(data.result);
       });
     }
-    
+
     function get_groups(callback) {
       show_activity("Getting assignment...");
       $.getJSON("/apis/get_groups").success(function(data) {
@@ -308,7 +315,7 @@
           } else {
             show_activity("Loading question...");
           }
-          
+
           get_question(session_id, function(question) {
             if (question === null) {
               log_no_question_received_for_group(group);
