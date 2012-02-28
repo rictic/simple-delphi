@@ -87,6 +87,34 @@
       <div><small>Search directly for a candidate &not;</small></div>
       <div><input type="text" mjt.attrs="attrs"></div>
     </div>
+
+    <span mjt.script="ondomready">
+      var suggest = $(".question").find(".suggest input");
+      $(".controls").find("button::visible").button().click(function() {
+        cast_judgment($(this));
+      });
+      console.log(suggest);
+      if (suggest.length > 0) {
+        var suggest_confs = {};
+        if (mode == 'dupes') {
+          var excluded_guid = suggest.attr("excluded_guid");
+          if (excluded_guid) {
+            suggest_confs.exclude_guids = excluded_guid;
+          }
+        }
+        suggest.suggest(suggest_confs).bind("fb-select", function(e, data) {
+          var topic_id = data.id;
+          var candidates = $(this).closest(".question").find(".candidates");
+          var unique_id = "" + now();
+          console.log(unique_id);
+          candidates.find("tr").prepend('&lt;td>&lt;div id="' + unique_id + '">&lt;div class="candidate">&lt;img class="spinner" src="images/spinner.gif">&lt;/div>&lt;/div>&lt;/td>');
+          getFreebaseInfoSingle(topic_id, function() {
+            mjt.run(unique_id, render_candidate, [topic_id]);
+          });
+        });
+      }
+
+    </span>
   </td>
   <span mjt.strip="true" mjt.for="b in buttons">
     <td nowrap="" mjt.if="!training || (training && b.training)">
@@ -141,6 +169,22 @@
   </span>
 </span>
 
+<span mjt.strip="true" mjt.def="render_candidate(c)">
+  <div class="candidate" id="candidate_${c}">
+    <div class="candidate_body">
+      <div class="selection ${selection}">
+        <button mjt.if="selection == 'lax'" mjt.onclick="cast_judgment" class="judgment button close-match unhandled" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
+        <button class="answer button match unhandled" mjt.onclick="cast_judgment" judgment="matches" value="${to_mid[c]}">${match_label}</button>
+      </div>
+    ${topic_viewer(c, topic_viewer_params)}
+    </div>
+  </div>
+  <span mjt.script="ondomready">
+    $("button.unhandled").button().removeClass("unhandled").click(function() {
+      cast_judgment($(this));
+    });
+  </span>
+</span>
 <!-- End Templates -->
 
 
@@ -181,15 +225,7 @@
             <table>
               <tr>
                 <td mjt.for="i,c in candidates" mjt.if="i < max_candidates">
-                  <div class="candidate">
-                    <div class="candidate_body">
-                      <div class="selection ${selection}">
-                        <button mjt.if="selection == 'lax'" mjt.onclick="cast_judgment" class="judgment button close-match" judgment="close_matches" value="${to_mid[c]}">${lax_label}</button>
-                        <button class="answer button match" mjt.onclick="cast_judgment" judgment="matches" value="${to_mid[c]}">${match_label}</button>
-                      </div>
-                    ${topic_viewer(c, topic_viewer_params)}
-                    </div>
-                  </div>
+                  ${render_candidate(c)}
                 </td>
               </tr>
             </table>
@@ -220,6 +256,10 @@
     var configs = params;
     var to_mid = {};
     var topics = {};
+
+    function now() {
+      return +new Date();
+    }
 
     //globals set in main and displayCandidates
     var mode, max_vandidates, total_candidates, most_relevant_first, training, judgments, buttons, candidates, message, candidate_attrs;
@@ -310,41 +350,58 @@
         });
       }
 
-      //Takes a list of ids, calls onSuccess with an object that maps those ids to their mids.
-      function getFreebaseInfo(candidates, ids, onSuccess) {
-        for (var i = 0; i < ids.length; i++) {
-          mqlRead({
-            "mid": null,
-            "id": ids[i]
-          }).success(function(response) {
-            to_mid[response.result["id"]] = response.result["mid"];
-            responseReceived();
-          });
-        }
+    }
 
-        for (var i = 0; i < candidates.length; i++) {
-          (function(candidate) {
-            getTopic(candidates[i]).success(function(response) {
-              topics[candidate] = response[candidate].result;
-              responseReceived();
-            })
-          })(candidates[i])
+    function getFreebaseInfoSingle(val, onSuccess) {
+      //breaks out of the weird mjt environment
+      setTimeout(function() {
+        getFreebaseInfo([val], [val], onSuccess);
+      }, 0);
+    }
 
-        }
-
-        var expected_responses = ids.length + candidates.length;
-        var received_responses = 0;
-        if (expected_responses === 0) {
+    //Takes a list of ids, calls onSuccess with an object that maps those ids to their mids.
+    function getFreebaseInfo(candidates, ids, onSuccess) {
+      var expected_responses = ids.length + candidates.length;
+      var received_responses = 0;
+      if (expected_responses === 0) {
+        onSuccess();
+      }
+      function responseReceived() {
+        received_responses++;
+        if (received_responses === expected_responses) {
           onSuccess();
         }
-        function responseReceived() {
-          received_responses++;
-          if (received_responses === expected_responses) {
-            onSuccess();
-          }
+      }
+
+      for (var i = 0; i < ids.length; i++) {
+        if (ids[i] in to_mid) {
+          responseReceived();
+          continue;
         }
+        mqlRead({
+          "mid": null,
+          "id": ids[i]
+        }).success(function(response) {
+          to_mid[response.result["id"]] = response.result["mid"];
+          responseReceived();
+        });
+      }
+
+      for (var i = 0; i < candidates.length; i++) {
+        (function(candidate) {
+          if (candidate in topics) {
+            responseReceived();
+            return;
+          }
+          getTopic(candidates[i]).success(function(response) {
+            topics[candidate] = response[candidate].result;
+            responseReceived();
+          })
+        })(candidates[i])
+
       }
     }
+
 
     function displayCandidates(new_candidates) {
       // dedupe new_candidates
@@ -472,64 +529,9 @@
       Delphi.submitJudgment(j);
     }
 
-    function load_topic(question, target, topic_id) {
-      var candidates = target.closest(".question").find(".candidates");
-      candidates.find("tr").prepend('<td><div class="candidate_placeholder"><div class="candidate"><img class="spinner" src="images/spinner.gif"></div></div></td>');
-      var placeholder = candidates.find(".candidate_placeholder:first");
-      load_candidate(question,placeholder,topic_id);
-    }
-
-    function prepare(placeholder) {
-      $(".candidate").removeClass("selected").hover(
-        function() {
-          $(".candidate").removeClass("selected");
-          $(this).addClass("selected");
-        },
-        function() {
-        }
-      );
-
-      placeholder.find(".candidate button").button().click(function() {
-        cast_judgment($(this));
-      });
-
-      $(".candidate:first").addClass("selected");
-
-      var max_height = 0;
-      placeholder.find(".candidate_body").each(function() {
-        var h = $(this).height();
-        if (h > max_height) max_height = h;
-      }).each(function() {
-        $(this).height(max_height + 30);
-        // 30 because the thumbnail is loaded asynchronously and might screw up the calculations
-        // so we add a little padding. Yeah, I know, it's a hack.
-
-        // also resize the source containers if needed
-        var h = $(document).height();
-        $(".source iframe").height(h);
-      });
-    };
-
     function init(question) {
       question.find(".post_form").submit();
 
-      var suggest = question.find(".suggest input");
-      if (suggest.length > 0) {
-        var suggest_confs = {};
-        if (mode == 'dupes') {
-          var excluded_guid = suggest.attr("excluded_guid");
-          if (excluded_guid) {
-            suggest_confs.exclude_guids = excluded_guid;
-          }
-        }
-        suggest.suggest(suggest_confs).bind("fb-select", function(e, data) {
-          load_topic(question,$(this),data.id);
-        });
-      }
-
-      question.find("button::visible").button().click(function() {
-        cast_judgment($(this));
-      })
     }
 
     $(function() {
