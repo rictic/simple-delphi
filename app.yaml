@@ -6,9 +6,16 @@ threadsafe: true
 
 handlers:
 - url: /
-  script: api.app
+  static_files: static/index.html
+  upload: static/index.html
+  login: required
+- url: /question/.*
+  static_files: static/index.html
+  upload: static/index.html
+  login: required
 - url: /apis/.*
   script: api.app
+  login: required
 - url: /client/delphi.js
   script: client.app
 - url: /
