@@ -46,10 +46,6 @@ delphiJQuery(document).ready(function() {
         callClient("acceptConfiguration", window.configs)
       });
 
-      pm.bind("preloadQuestion", function(question) {
-        callClient("preloadQuestion", question);
-      });
-
       // register the question handler
       pm.bind("question", function(question) {
         window.question = question;

@@ -28,6 +28,8 @@ def get_question(operator_id, session_id, num):
 
   return raja.get("/questions/serve", params)
 
+def get_payload(operator_id, question_id):
+  return raja.get("/questions/%s/payload" % (question_id,), {"operator_id": operator_id})
 
 def submit_judgment(operator_id, session_id, question_id, judgment, timecost):
   timestamp = int(round(time.time()))

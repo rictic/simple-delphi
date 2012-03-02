@@ -88,45 +88,6 @@
       }
     }
 
-    function push_question(app,question,params) {
-      push_question_time = now();
-
-      var submit = function() {
-        log("submitted question to the app");
-        pm({
-          target: app_window,
-          type: "preloadQuestion",
-          data: question
-        });
-        pm({
-          target: app_window,
-          type: "question",
-          data: question
-        });
-      }
-
-      //currently we reload the app for every question into a new iframe
-      var app_frame = $("#toClone").find(".app").clone();
-      app_frame.attr("src", app.url);
-      $("#app_area").empty().append(app_frame);
-      iframe_width = undefined; iframe_height = undefined;
-      var app_window = app_frame[0].contentWindow; //must be done after frame is in DOM
-      resize();
-      log("loading app from: " + app.url);
-
-      pm.bind("ready", function() {
-        log("app is ready, let's roll");
-        pm({
-          target: app_window,
-          type: "acceptConfiguration",
-          data: params
-        });
-        hide_activity();
-        show_app();
-        submit();
-      });
-    }
-
     var group_to_session = {};
     function get_session_for_group(group, continuation) {
       if (!(group in group_to_session)) {
@@ -147,27 +108,18 @@
     }
 
     var question_to_session = {};
-    var session_to_questions = {};
-    function get_question(session_id, continuation) {
-      if (!(session_id in session_to_questions)) {
-        session_to_questions[session_id] = [];
-      }
-      var cached_questions = session_to_questions[session_id];
-
+    function get_question_ids(session_id, continuation, num) {
       $.getJSON("/apis/get_question", {
         "session_id" : session_id,
-        "num" : 5
+        "num" : num
       }).success(function(data) {
-        if ("result" in data && "question_batch" in data.result) {
-          var questions = data.result.question_batch;
-          if (questions.length === 0) {
-            continuation(null);
-            return;
-          }
+        if ("result" in data && "question_ids" in data.result) {
+          var question_ids = data.result.question_ids;
 
-          var question = questions[0];
-          question_to_session[question['question_id']] = session_id;
-          continuation(question);
+          for (var i = 0; i < question_ids.length; i++) {
+            question_to_session[question_ids[i]] = session_id;
+          }
+          continuation(question_ids);
         } else {
           alert("could not obtain question: " + JSON.stringify(data,null,2));
         }
@@ -222,6 +174,12 @@
           get_group_details(data.result[i], function(){});
         }
         callback(data.result);
+      });
+    }
+
+    function get_payload(question_id, callback) {
+      $.getJSON("/apis/get_payload", {question_id: question_id}).success(function(data) {
+        return data.result;
       });
     }
 
@@ -300,8 +258,90 @@
       //TODO: inform the contributor about the context switch and give them the info they need
     }
 
-    var prev_group = null;
+
     function next_question() {
+      var firstFrame = $("#app_area iframe.hidden")[0];
+      if (firstFrame) {
+        display_question_frame(firstFrame);
+        ensure_preloaded();
+      } else {
+        ensure_preloaded(next_question);
+      }
+    }
+
+    var PRELOAD_DEPTH = 5;
+    function ensure_preloaded(onSomePreloaded) {
+      onSomePreloaded = onSomePreloaded || function(){};
+      var toLoad = PRELOAD_DEPTH - $("#app_area iframe").length;
+      if (toLoad < 1) {
+        onSomePreloaded();
+        return;
+      }
+
+      preload_questions(toLoad, function(question_ids, group) {
+        if (question_ids.length === 0) {
+          setTimeout(function(){ensure_preloaded(onSomePreloaded)}, 1 * 1000);
+          return;
+        }
+        for (var i = 0; i < question_ids.length; i++) {
+          preload_frame(question_ids[i], group);
+        }
+        onSomePreloaded();
+        setTimeout(ensure_preloaded, 1 * 1000);
+      });
+    }
+
+    function display_question_frame(app_frame) {
+      $("#app_area iframe.visible").remove()
+      $("#app_area iframe.hidden").removeClass("hidden").addClass("visible");
+      iframe_width = undefined; iframe_height = undefined;
+      resize();
+    }
+
+    function preload_frame(question_id, group) {
+      get_group_details(group, function(task_details) {
+        console.log(task_details);
+        var app = task_details.app;
+        var params = task_details.params;
+
+        get_payload(question_id, function(payload) {
+          push_question_time = now();
+          var question = {
+            payload: payload,
+            question_id: question_id
+          };
+          var submit = function() {
+            log("submitted question to the app");
+            pm({
+              target: app_window,
+              type: "question",
+              data: question
+            });
+          }
+
+          //currently we reload the app for every question into a new iframe
+          var app_frame = $("#toClone").find(".app").clone();
+          app_frame.attr("src", app.url);
+          var app_window = app_frame[0].contentWindow;
+          log("loading app from: " + app.url);
+
+          pm.bind("ready", function() {
+            log("app is ready, let's roll");
+            pm({
+              target: app_window,
+              type: "acceptConfiguration",
+              data: params
+            });
+            hide_activity();
+            show_app();
+            submit();
+          });
+        });
+      });
+    }
+
+    var prev_group = null;
+    function preload_questions(num, onLoaded) {
       get_groups(function(groups) {
         if (groups.length === 0) {
           show_activity("You're not assigned to any tasks right now.");
@@ -316,25 +356,22 @@
             show_activity("Loading question...");
           }
 
-          get_question(session_id, function(question) {
-            if (question === null) {
+          get_question_ids(session_id, function(question_ids) {
+            if (question_ids.length === 0) {
               log_no_question_received_for_group(group);
-              setTimeout(next_question, 1000 * 3);
-              return;
+            } else {
+              first_question = false;
+              log_question_received_for_group(group);
+              if (group !== prev_group) {
+                on_context_switch();
+              }
             }
 
-            first_question = false;
-            log_question_received_for_group(group, question);
-            if (group !== prev_group) {
-              on_context_switch();
-            }
-            get_group_details(group, function(task_details) {
-              console.log(task_details);
-              push_question(task_details.app, question, task_details.configurations);
-            });
-          });
+            onLoaded(question_ids, group);
+          }, num);
         });
       });
+
     }
 
     function received_judgment(data) {
@@ -356,6 +393,7 @@
 
       var question_id = question.question_id;
       var session_id = question_to_session[question_id]
+      delete question_to_session[question_id];
 
       next_question();
       // FIXME(rictic)

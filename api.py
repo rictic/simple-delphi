@@ -54,6 +54,13 @@ class GetQuestion(Base):
     num = self.request.params.get("num")
     return raja.get_question(user.email(), session_id, num)
 
+class GetPayload(Base):
+  cache_time = 60 * 60  # always unchanging, so this can be as long as desired
+  @json_responder
+  def get(self):
+    user = users.get_current_user()
+    question_id, = self.require_params(["question_id"])
+    return raja.get_payload(user.email(), question_id)
 
 class SessionStatus(Base):
   @json_responder
@@ -108,6 +115,7 @@ app = webapp2.WSGIApplication([
     ("/apis/get_groups", GetGroups),
     ("/apis/get_task_details", GetTaskDetails),
     ("/apis/get_question", GetQuestion),
+    ("/apis/get_payload", GetPayload),
     ("/apis/session_status", SessionStatus),
     ("/apis/start_session", StartSession),
     ("/apis/submit_judgment", SubmitJudgment),
