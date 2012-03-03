@@ -22,8 +22,7 @@ class Requester(object):
     logging.info("With data:\n%s", encoded_data)
     request = urllib2.Request(
         url,
-        data=encoded_data,
-        headers={"Content-Type": "application/x-www-form-encoded"})
+        data=encoded_data)
     return json.load(urllib2.urlopen(request, timeout=30)).get("result")
 
   def postJSON(self, path, data):
