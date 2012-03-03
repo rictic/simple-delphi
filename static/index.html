@@ -202,7 +202,7 @@
         callback(data.result);
       });
     }
-    
+
     function get_groups(callback) {
       show_activity("Getting assignment...");
       $.getJSON("/apis/get_groups").success(function(data) {
@@ -308,7 +308,7 @@
           } else {
             show_activity("Loading question...");
           }
-          
+
           get_question(session_id, function(question) {
             if (question === null) {
               log_no_question_received_for_group(group);
@@ -332,7 +332,6 @@
 
     function received_judgment(data) {
       var judgment = data.judgment;
-      var question = data.question;
 
       log("received judgment");
       log(judgment);
@@ -347,21 +346,19 @@
 
       // TODO(SM) update URL for permalinking
 
-      var question_id = question.question_id;
+      var question_id = data.question_id;
       var session_id = question_to_session[question_id]
 
-      next_question();
-      // FIXME(rictic)
-      // $.post("/apis/submit_judgment",{
-      //   "session_id" : session_id,
-      //   "question_id" : question_id,
-      //   "timecost" : now() - push_question_time,
-      //   "judgment" : JSON.stringify(judgment)
-      // }).success(function(data) {
-      //   next_question();
-      // }).error(function(data) {
-      //   alert("error submitting judgment: " + JSON.stringify(data));
-      // });
+      $.post("/apis/submit_judgment",{
+        "session_id" : session_id,
+        "question_id" : question_id,
+        "timecost" : now() - push_question_time,
+        "judgment" : JSON.stringify(judgment)
+      }).success(function(data) {
+        next_question();
+      }).error(function(data) {
+        alert("error submitting judgment: " + JSON.stringify(data));
+      });
     }
 
     function keep_sessions_alive() {

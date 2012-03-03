@@ -2,6 +2,7 @@
  * This is the code that should be shared by all delphi apps.
  */
 
+var question_id;
 /**
  * This is the function that the delphi app calls to return a judgment
  */
@@ -11,7 +12,7 @@ var submitJudgment = function(judgment) {
       target: window.parent,
       type: "judgment",
       data: {
-        "question" : window.question,
+        "question_id" : question_id,
         "judgment" : judgment
       }
     });
@@ -53,6 +54,7 @@ delphiJQuery(document).ready(function() {
       // register the question handler
       pm.bind("question", function(question) {
         window.question = question;
+        question_id = question.question_id;
         callClient("main", window.question);
       });
 
