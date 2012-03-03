@@ -21,11 +21,12 @@ def json_responder(wrapped):
 
 class Base(webapp2.RequestHandler):
   cache_time = None
+
   def require_params(self, params):
     values = []
     for param in params:
       if param not in self.request.params:
-        raise UserError("You must provide the param '%s'" % param)
+        raise ValueError("You must provide the param '%s'" % param)
       values.append(self.request.params[param])
     return values
 
