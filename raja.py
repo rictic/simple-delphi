@@ -5,7 +5,7 @@ import time
 # FIXME(stefanom): make sure this gets implemented properly later
 auth_token = "1"
 
-raja = util.Requester("http://raja-portico.appspot.com")
+raja = util.Requester("http://payload-separate.raja-portico.appspot.com")
 
 
 def start_session(operator_id, groups):
