@@ -272,9 +272,15 @@
     var PRELOAD_DEPTH = 5;
     function ensure_preloaded(onSomePreloaded) {
       onSomePreloaded = onSomePreloaded || function(){};
-      var toLoad = PRELOAD_DEPTH - $("#app_area iframe").length;
-      if (toLoad < 1) {
+      var numPreloaded = $("#app_area iframe").length;
+      var toLoad = PRELOAD_DEPTH - numPreloaded;
+      //don't block displaying the next question if we've got any frames ready to display
+      if (numPreloaded > 0) {
         onSomePreloaded();
+        onSomePreloaded = function(){};
+      }     
+      //do not need to preload more now
+      if (toLoad < 1) {
         return;
       }
 
@@ -283,11 +289,14 @@
           setTimeout(function(){ensure_preloaded(onSomePreloaded)}, 1 * 1000);
           return;
         }
-        for (var i = 0; i < question_ids.length; i++) {
-          preload_frame(question_ids[i], group);
-        }
-        onSomePreloaded();
-        setTimeout(ensure_preloaded, 1 * 1000);
+        
+        get_group_details(group, function(task_details) {
+          for (var i = 0; i < question_ids.length; i++) {
+            preload_frame(question_ids[i], task_details);
+          }
+          onSomePreloaded();
+          setTimeout(ensure_preloaded, 1 * 1000);
+        });
       });
     }
 
@@ -298,44 +307,41 @@
       resize();
     }
 
-    function preload_frame(question_id, group) {
-      get_group_details(group, function(task_details) {
-        console.log(task_details);
-        var app = task_details.app;
-        var params = task_details.params;
+    function preload_frame(question_id, task_details) {
+      var app = task_details.app;
+      var params = task_details.params;
 
-        get_payload(question_id, function(payload) {
-          push_question_time = now();
-          var question = {
-            payload: payload,
-            question_id: question_id
-          };
-          var submit = function() {
-            log("submitted question to the app");
-            pm({
-              target: app_window,
-              type: "question",
-              data: question
-            });
-          }
+      //currently we reload the app for every question into a new iframe
+      var app_frame = $("#toClone").find(".app").clone();
+      app_frame.attr("src", app.url);
+      var app_window = app_frame[0].contentWindow;
+      log("loading app from: " + app.url);
 
-          //currently we reload the app for every question into a new iframe
-          var app_frame = $("#toClone").find(".app").clone();
-          app_frame.attr("src", app.url);
-          var app_window = app_frame[0].contentWindow;
-          log("loading app from: " + app.url);
-
-          pm.bind("ready", function() {
-            log("app is ready, let's roll");
-            pm({
-              target: app_window,
-              type: "acceptConfiguration",
-              data: params
-            });
-            hide_activity();
-            show_app();
-            submit();
+      get_payload(question_id, function(payload) {
+        push_question_time = now();
+        var question = {
+          payload: payload,
+          question_id: question_id
+        };
+        var submit = function() {
+          log("submitted question to the app");
+          pm({
+            target: app_window,
+            type: "question",
+            data: question
           });
+        }
+
+        pm.bind("ready", function() {
+          log("app is ready, let's roll");
+          pm({
+            target: app_window,
+            type: "acceptConfiguration",
+            data: params
+          });
+          hide_activity();
+          show_app();
+          submit();
         });
       });
     }
