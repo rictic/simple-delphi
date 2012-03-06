@@ -52,11 +52,12 @@ delphiJQuery(document).ready(function() {
         callClient("main", window.question);
       });
 
+      var question_id = window.location.hash.substring(1);
       // tell delphi we're ready to roll
       pm({
         target: window.parent,
         type: "ready",
-        data: {}
+        data: question_id
       })
     } else {
       if (typeof window.question != "undefined" && typeof window.configs != "undefined") {

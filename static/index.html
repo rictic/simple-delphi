@@ -12,7 +12,7 @@
   <div>
     <div id="activity" class="message hidden"><span class="text"></span> <img src="/images/spinner.gif"></div>
 
-    <div id="app_area" class="hidden">
+    <div id="app_area">
 
     </div>
 
@@ -21,7 +21,7 @@
     <div id="dialog_message" class="hidden"></div>
 
     <div id="toClone" class="hidden">
-      <iframe class="app" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
+      <iframe class="app hidden" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
     </div>
   </div>
 
@@ -133,7 +133,7 @@
     }
 
     var app_url_map = {
-      matchmaker_recon: "/apps/matchmaker/index.html"
+      // matchmaker_recon: "/apps/matchmaker/index.html"
     }
     function get_group_details(group, callback) {
       $.getJSON("/apis/get_task_details", {unguessable_id: group}).success(function(data) {
@@ -179,7 +179,7 @@
 
     function get_payload(question_id, callback) {
       $.getJSON("/apis/get_payload", {question_id: question_id}).success(function(data) {
-        return data.result;
+        callback(data.result);
       });
     }
 
@@ -278,7 +278,7 @@
       if (numPreloaded > 0) {
         onSomePreloaded();
         onSomePreloaded = function(){};
-      }     
+      }
       //do not need to preload more now
       if (toLoad < 1) {
         return;
@@ -289,7 +289,7 @@
           setTimeout(function(){ensure_preloaded(onSomePreloaded)}, 1 * 1000);
           return;
         }
-        
+
         get_group_details(group, function(task_details) {
           for (var i = 0; i < question_ids.length; i++) {
             preload_frame(question_ids[i], task_details);
@@ -302,48 +302,59 @@
 
     function display_question_frame(app_frame) {
       $("#app_area iframe.visible").remove()
-      $("#app_area iframe.hidden").removeClass("hidden").addClass("visible");
+      $(app_frame).removeClass("hidden").addClass("visible");
+      hide_activity();
+      show_app();
       iframe_width = undefined; iframe_height = undefined;
       resize();
+      push_question_time = now();
     }
 
+    var question_onreadys = {};
     function preload_frame(question_id, task_details) {
       var app = task_details.app;
       var params = task_details.params;
 
       //currently we reload the app for every question into a new iframe
       var app_frame = $("#toClone").find(".app").clone();
-      app_frame.attr("src", app.url);
+      app_frame.attr("src", app.url + "#" + question_id);
+      app_frame.appendTo("#app_area");
       var app_window = app_frame[0].contentWindow;
       log("loading app from: " + app.url);
 
+      question_onreadys[question_id] = function() {
+        log("question " + question_id + " is ready, let's roll");
+        pm({
+          target: app_window,
+          type: "acceptConfiguration",
+          data: params
+        });
+        onResponse();
+      }
+
+      var question;
       get_payload(question_id, function(payload) {
-        push_question_time = now();
-        var question = {
+        console.log("got payload for question_id: " + question_id);
+        question = {
           payload: payload,
           question_id: question_id
         };
-        var submit = function() {
-          log("submitted question to the app");
+        onResponse();
+      });
+
+      var responses = 0;
+      var expected = 2;
+      function onResponse() {
+        responses++;
+        if (responses === expected) {
+          //frame is ready, question is loaded
           pm({
             target: app_window,
             type: "question",
             data: question
           });
         }
-
-        pm.bind("ready", function() {
-          log("app is ready, let's roll");
-          pm({
-            target: app_window,
-            type: "acceptConfiguration",
-            data: params
-          });
-          hide_activity();
-          show_app();
-          submit();
-        });
-      });
+      }
     }
 
     var prev_group = null;
@@ -426,6 +437,10 @@
     $(function() {
       setInterval(keep_sessions_alive, 1000 * 15);
       pm.bind("judgment", received_judgment);
+      pm.bind("ready", function(question_id) {
+        question_onreadys[question_id]();
+        delete question_onreadys[question_id];
+      });
       $(window).resize(resize);
       next_question();
     })
