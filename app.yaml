@@ -1,5 +1,5 @@
 application: freebase-delphi
-version: multi-iframe
+version: simple
 runtime: python27
 api_version: 1
 threadsafe: true
