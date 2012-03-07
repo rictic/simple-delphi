@@ -45,14 +45,23 @@
       }
     }
 
+    function pretty(o) {
+      log(JSON.stringify(o, null, 2));
+    }
+
     function now() {
       return (new Date()).getTime();
     }
 
     function show_activity(msg) {
       var a = $("#activity");
-      a.find(".text").html(msg);
-      a.show();
+      if (msg) {
+        a.find(".text").html(msg);
+      }
+      //only show activity if don't have an active question iframe
+      if ($("#app_area iframe.visible").length === 0) {
+        a.show();
+      }
     }
 
     function hide_activity() {
@@ -115,7 +124,7 @@
       }).success(function(data) {
         if ("result" in data && "question_ids" in data.result) {
           var question_ids = data.result.question_ids;
-
+          pretty(question_ids);
           for (var i = 0; i < question_ids.length; i++) {
             question_to_session[question_ids[i]] = session_id;
           }
@@ -147,14 +156,14 @@
         }
         result.configurations.proxied = true
         if (typeof result.app === "string") {
-          console.error("app is just a string...");
+          // console.error("app is just a string...");
           result.app = {name: result.app};
         }
         if (!result.app.url) {
           if (result.app.name in app_url_map) {
             result.app.url = app_url_map[result.app.name];
           } else {
-            console.error("App given by refinery doesn't have a url, filling in dummy...");
+            // console.error("App given by refinery doesn't have a url, filling in dummy...");
             result.app.url = "/apps/dummy/index.html"
           }
         }
@@ -260,11 +269,12 @@
 
 
     function next_question() {
-      var firstFrame = $("#app_area iframe.hidden")[0];
+      var firstFrame = $("#app_area iframe.hidden.ready")[0];
       if (firstFrame) {
         display_question_frame(firstFrame);
         ensure_preloaded();
       } else {
+        show_activity();
         ensure_preloaded(next_question);
       }
     }
@@ -274,11 +284,6 @@
       onSomePreloaded = onSomePreloaded || function(){};
       var numPreloaded = $("#app_area iframe").length;
       var toLoad = PRELOAD_DEPTH - numPreloaded;
-      //don't block displaying the next question if we've got any frames ready to display
-      if (numPreloaded > 0) {
-        onSomePreloaded();
-        onSomePreloaded = function(){};
-      }
       //do not need to preload more now
       if (toLoad < 1) {
         return;
@@ -286,22 +291,28 @@
 
       preload_questions(toLoad, function(question_ids, group) {
         if (question_ids.length === 0) {
-          setTimeout(function(){ensure_preloaded(onSomePreloaded)}, 1 * 1000);
+          setTimeout(function(){ensure_preloaded(callOnSomePreloadedOnce)}, 1 * 1000);
           return;
         }
 
         get_group_details(group, function(task_details) {
           for (var i = 0; i < question_ids.length; i++) {
-            preload_frame(question_ids[i], task_details);
+            preload_frame(question_ids[i], task_details, callOnSomePreloadedOnce);
           }
-          onSomePreloaded();
           setTimeout(ensure_preloaded, 1 * 1000);
         });
       });
+
+      var calledOnSomePreloaded = false;
+      function callOnSomePreloadedOnce() {
+        if (!calledOnSomePreloaded) {
+          onSomePreloaded();
+          calledOnSomePreloaded = true;
+        }
+      }
     }
 
     function display_question_frame(app_frame) {
-      $("#app_area iframe.visible").remove()
       $(app_frame).removeClass("hidden").addClass("visible");
       hide_activity();
       show_app();
@@ -311,14 +322,20 @@
     }
 
     var question_onreadys = {};
-    function preload_frame(question_id, task_details) {
+    function preload_frame(question_id, task_details, onReady) {
+      if ($("#question-" + question_id).length > 0) {
+        //already loaded this question
+        console.warn("tried to preload " + question_id + " which is already present");
+        return;
+      }
       var app = task_details.app;
       var params = task_details.params;
 
       //currently we reload the app for every question into a new iframe
-      var app_frame = $("#toClone").find(".app").clone();
-      app_frame.attr("src", app.url + "#" + question_id);
-      app_frame.appendTo("#app_area");
+      var app_frame = $("#toClone").find(".app").clone()
+        .attr("src", app.url + "#" + question_id)
+        .attr("id", "question-" + question_id)
+        .appendTo("#app_area");
       var app_window = app_frame[0].contentWindow;
       log("loading app from: " + app.url);
 
@@ -353,6 +370,8 @@
             type: "question",
             data: question
           });
+          app_frame.addClass("ready");
+          onReady();
         }
       }
     }
@@ -411,6 +430,7 @@
       var question_id = question.question_id;
       var session_id = question_to_session[question_id]
       delete question_to_session[question_id];
+      $("#app_area iframe.visible").remove()
 
       next_question();
       // FIXME(rictic)
