@@ -12,7 +12,7 @@
   <div>
     <div id="activity" class="message hidden"><span class="text"></span> <img src="/images/spinner.gif"></div>
 
-    <div id="app_area" class="hidden">
+    <div id="app_area">
 
     </div>
 
@@ -21,7 +21,7 @@
     <div id="dialog_message" class="hidden"></div>
 
     <div id="toClone" class="hidden">
-      <iframe class="app" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
+      <iframe class="app hidden" name="app" class="hidden" src="about:blank" scrolling="none"></iframe>
     </div>
   </div>
 
@@ -45,14 +45,23 @@
       }
     }
 
+    function pretty(o) {
+      log(JSON.stringify(o, null, 2));
+    }
+
     function now() {
       return (new Date()).getTime();
     }
 
     function show_activity(msg) {
       var a = $("#activity");
-      a.find(".text").html(msg);
-      a.show();
+      if (msg) {
+        a.find(".text").html(msg);
+      }
+      //only show activity if don't have an active question iframe
+      if ($("#app_area iframe.visible").length === 0) {
+        a.show();
+      }
     }
 
     function hide_activity() {
@@ -88,45 +97,6 @@
       }
     }
 
-    function push_question(app,question,params) {
-      push_question_time = now();
-
-      var submit = function() {
-        log("submitted question to the app");
-        pm({
-          target: app_window,
-          type: "preloadQuestion",
-          data: question
-        });
-        pm({
-          target: app_window,
-          type: "question",
-          data: question
-        });
-      }
-
-      //currently we reload the app for every question into a new iframe
-      var app_frame = $("#toClone").find(".app").clone();
-      app_frame.attr("src", app.url);
-      $("#app_area").empty().append(app_frame);
-      iframe_width = undefined; iframe_height = undefined;
-      var app_window = app_frame[0].contentWindow; //must be done after frame is in DOM
-      resize();
-      log("loading app from: " + app.url);
-
-      pm.bind("ready", function() {
-        log("app is ready, let's roll");
-        pm({
-          target: app_window,
-          type: "acceptConfiguration",
-          data: params
-        });
-        hide_activity();
-        show_app();
-        submit();
-      });
-    }
-
     var group_to_session = {};
     function get_session_for_group(group, continuation) {
       if (!(group in group_to_session)) {
@@ -147,20 +117,18 @@
     }
 
     var question_to_session = {};
-    function get_question(session_id, continuation) {
+    function get_question_ids(session_id, continuation, num) {
       $.getJSON("/apis/get_question", {
-        "session_id" : session_id
+        "session_id" : session_id,
+        "num" : num
       }).success(function(data) {
-        if ("result" in data && "question_batch" in data.result) {
-          var questions = data.result.question_batch;
-          if (questions.length === 0) {
-            continuation(null);
-            return;
+        if ("result" in data && "question_ids" in data.result) {
+          var question_ids = data.result.question_ids;
+          pretty(question_ids);
+          for (var i = 0; i < question_ids.length; i++) {
+            question_to_session[question_ids[i]] = session_id;
           }
-
-          var question = questions[0];
-          question_to_session[question['question_id']] = session_id;
-          continuation(question);
+          continuation(question_ids);
         } else {
           alert("could not obtain question: " + JSON.stringify(data,null,2));
         }
@@ -188,14 +156,14 @@
         }
         result.configurations.proxied = true
         if (typeof result.app === "string") {
-          console.error("app is just a string...");
+          // console.error("app is just a string...");
           result.app = {name: result.app};
         }
         if (!result.app.url) {
           if (result.app.name in app_url_map) {
             result.app.url = app_url_map[result.app.name];
           } else {
-            console.error("App given by refinery doesn't have a url, filling in dummy...");
+            // console.error("App given by refinery doesn't have a url, filling in dummy...");
             result.app.url = "/apps/dummy/index.html"
           }
         }
@@ -214,6 +182,12 @@
         for(var i = 0; i < data.result.length; i++) {
           get_group_details(data.result[i], function(){});
         }
+        callback(data.result);
+      });
+    }
+
+    function get_payload(question_id, callback) {
+      $.getJSON("/apis/get_payload", {question_id: question_id}).success(function(data) {
         callback(data.result);
       });
     }
@@ -293,8 +267,117 @@
       //TODO: inform the contributor about the context switch and give them the info they need
     }
 
-    var prev_group = null;
+
     function next_question() {
+      var firstFrame = $("#app_area iframe.hidden.ready")[0];
+      if (firstFrame) {
+        display_question_frame(firstFrame);
+        ensure_preloaded();
+      } else {
+        show_activity();
+        ensure_preloaded(next_question);
+      }
+    }
+
+    var PRELOAD_DEPTH = 5;
+    function ensure_preloaded(onSomePreloaded) {
+      onSomePreloaded = onSomePreloaded || function(){};
+      var numPreloaded = $("#app_area iframe").length;
+      var toLoad = PRELOAD_DEPTH - numPreloaded;
+      //do not need to preload more now
+      if (toLoad < 1) {
+        return;
+      }
+
+      preload_questions(toLoad, function(question_ids, group) {
+        if (question_ids.length === 0) {
+          setTimeout(function(){ensure_preloaded(callOnSomePreloadedOnce)}, 1 * 1000);
+          return;
+        }
+
+        get_group_details(group, function(task_details) {
+          for (var i = 0; i < question_ids.length; i++) {
+            preload_frame(question_ids[i], task_details, callOnSomePreloadedOnce);
+          }
+          setTimeout(ensure_preloaded, 1 * 1000);
+        });
+      });
+
+      var calledOnSomePreloaded = false;
+      function callOnSomePreloadedOnce() {
+        if (!calledOnSomePreloaded) {
+          onSomePreloaded();
+          calledOnSomePreloaded = true;
+        }
+      }
+    }
+
+    function display_question_frame(app_frame) {
+      $(app_frame).removeClass("hidden").addClass("visible");
+      hide_activity();
+      show_app();
+      iframe_width = undefined; iframe_height = undefined;
+      resize();
+      push_question_time = now();
+    }
+
+    var question_onreadys = {};
+    function preload_frame(question_id, task_details, onReady) {
+      if ($("#question-" + question_id).length > 0) {
+        //already loaded this question
+        console.warn("tried to preload " + question_id + " which is already present");
+        return;
+      }
+      var app = task_details.app;
+      var params = task_details.configurations;
+
+      //currently we reload the app for every question into a new iframe
+      var app_frame = $("#toClone").find(".app").clone()
+        .attr("src", app.url + "#" + question_id)
+        .attr("id", "question-" + question_id)
+        .appendTo("#app_area");
+      var app_window = app_frame[0].contentWindow;
+      log("loading app from: " + app.url);
+
+      question_onreadys[question_id] = function() {
+        log("question " + question_id + " is ready, let's roll");
+        pm({
+          target: app_window,
+          type: "acceptConfiguration",
+          data: params
+        });
+        onResponse();
+      }
+
+      var question;
+      get_payload(question_id, function(payload) {
+        console.log("got payload for question_id: " + question_id);
+        question = {
+          payload: payload,
+          question_id: question_id
+        };
+        onResponse();
+      });
+
+      var responses = 0;
+      var expected = 2;
+      function onResponse() {
+        responses++;
+        if (responses === expected) {
+          //frame is ready, question is loaded
+          pm({
+            target: app_window,
+            type: "question",
+            data: question
+          });
+          app_frame.addClass("ready");
+          onReady();
+        }
+      }
+    }
+
+    var prev_group = null;
+    function preload_questions(num, onLoaded) {
       get_groups(function(groups) {
         if (groups.length === 0) {
           show_activity("You're not assigned to any tasks right now.");
@@ -309,25 +392,22 @@
             show_activity("Loading question...");
           }
 
-          get_question(session_id, function(question) {
-            if (question === null) {
+          get_question_ids(session_id, function(question_ids) {
+            if (question_ids.length === 0) {
               log_no_question_received_for_group(group);
-              setTimeout(next_question, 1000 * 3);
-              return;
+            } else {
+              first_question = false;
+              log_question_received_for_group(group);
+              if (group !== prev_group) {
+                on_context_switch();
+              }
             }
 
-            first_question = false;
-            log_question_received_for_group(group, question);
-            if (group !== prev_group) {
-              on_context_switch();
-            }
-            get_group_details(group, function(task_details) {
-              console.log(task_details);
-              push_question(task_details.app, question, task_details.configurations);
-            });
-          });
+            onLoaded(question_ids, group);
+          }, num);
         });
       });
+
     }
 
     function received_judgment(data) {
@@ -348,6 +428,8 @@
 
       var question_id = data.question_id;
       var session_id = question_to_session[question_id]
+      delete question_to_session[question_id];
+      $("#app_area iframe.visible").remove()
 
       $.post("/apis/submit_judgment",{
         "session_id" : session_id,
@@ -372,6 +454,10 @@
     $(function() {
       setInterval(keep_sessions_alive, 1000 * 15);
       pm.bind("judgment", received_judgment);
+      pm.bind("ready", function(question_id) {
+        question_onreadys[question_id]();
+        delete question_onreadys[question_id];
+      });
       $(window).resize(resize);
       next_question();
     })

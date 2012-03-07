@@ -5,7 +5,7 @@ import time
 # FIXME(stefanom): make sure this gets implemented properly later
 auth_token = "1"
 
-raja = util.Requester("http://raja-portico.appspot.com")
+raja = util.Requester("http://payload-separate.raja-portico.appspot.com")
 
 
 def start_session(operator_id, groups):
@@ -28,6 +28,8 @@ def get_question(operator_id, session_id, num):
 
   return raja.get("/questions/serve", params)
 
+def get_payload(operator_id, question_id):
+  return raja.get("/questions/%s/payload" % (question_id,), {"operator_id": operator_id})
 
 def submit_judgment(operator_id, session_id, question_id, judgment, timecost):
   timestamp = int(round(time.time()))
