@@ -142,7 +142,7 @@
     }
 
     var app_url_map = {
-      // matchmaker_recon: "/apps/matchmaker/index.html"
+      matchmaker_recon: "/apps/matchmaker/index.html"
     }
     function get_group_details(group, callback) {
       $.getJSON("/apis/get_task_details", {unguessable_id: group}).success(function(data) {
@@ -329,7 +329,7 @@
         return;
       }
       var app = task_details.app;
-      var params = task_details.params;
+      var params = task_details.configurations;
 
       //currently we reload the app for every question into a new iframe
       var app_frame = $("#toClone").find(".app").clone()
