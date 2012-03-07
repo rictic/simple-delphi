@@ -97,19 +97,57 @@
       }
     }
 
+    function getJSON(url, params, onSuccess, onError) {
+      onSuccess = onSuccess || function(){};
+      //todo: display the error better
+      onError = onError || function(){
+        alert("Error communicating with the server, please refresh the page.")
+      };
+      var tries = 0;
+      var max_tries = 10;
+      function get() {
+        tries++;
+        if (tries > max_tries) {
+          console.error(max_tries + " requests in a row to " + url + " failed, giving up. Params:", params);
+          onError();
+          return;
+        }
+        $.getJSON(url, params).success(onSuccess).error(get);
+      }
+      get();
+    }
+
+    function idemPost(url, data, onSuccess, onError) {
+      onSuccess = onSuccess || function(){};
+      //todo: display the error better
+      onError = onError || function(){
+        alert("Error communicating with the server, please refresh the page.")
+      };
+      var tries = 0;
+      var max_tries = 10;
+      function post() {
+        tries++;
+        if (tries > max_tries) {
+          console.error(max_tries + " requests in a row to " + url + " failed, giving up. Data:", data);
+          onError();
+          return;
+        }
+        $.post(url, data).success(onSuccess).error(post);
+      }
+      post();
+    }
+
     var group_to_session = {};
     function get_session_for_group(group, continuation) {
       if (!(group in group_to_session)) {
         show_activity("Starting session...");
-        $.getJSON("/apis/start_session?group=" + group).success(function(data) {
+        getJSON("/apis/start_session?group=" + group, function(data) {
           if ("result" in data && "session_id" in data.result) {
             group_to_session[group] = data.result.session_id;
             continuation(group_to_session[group]);
           } else {
             alert("could not obtain session: " + JSON.stringify(data,null,2));
           }
-        }).error(function(data) {
-          alert("error getting session: " + JSON.stringify(data,null,2));
         });
       } else {
         continuation(group_to_session[group]);
@@ -118,10 +156,10 @@
 
     var question_to_session = {};
     function get_question_ids(session_id, continuation, num) {
-      $.getJSON("/apis/get_question", {
+      getJSON("/apis/get_question", {
         "session_id" : session_id,
         "num" : num
-      }).success(function(data) {
+      }, function(data) {
         if ("result" in data && "question_ids" in data.result) {
           var question_ids = data.result.question_ids;
           pretty(question_ids);
@@ -132,12 +170,6 @@
         } else {
           alert("could not obtain question: " + JSON.stringify(data,null,2));
         }
-      }).error(function(data) {
-        if (data.status == 408) {
-          continuation(null);
-        } else {
-          alert("error getting question: " + JSON.stringify(data,null,2));
-        }
       });
     }
 
@@ -145,7 +177,7 @@
       matchmaker_recon: "/apps/matchmaker/index.html"
     }
     function get_group_details(group, callback) {
-      $.getJSON("/apis/get_task_details", {unguessable_id: group}).success(function(data) {
+      getJSON("/apis/get_task_details", {unguessable_id: group}, function(data) {
         if (!("result" in data)) {
           alert("error getting task details, got invalid response");
           return;
@@ -173,7 +205,7 @@
 
     function get_groups(callback) {
       show_activity("Getting assignment...");
-      $.getJSON("/apis/get_groups").success(function(data) {
+      getJSON("/apis/get_groups", function(data) {
         if (!("result" in data) || !$.isArray(data.result)) {
           alert("error getting groups, got invalid response");
           return;
@@ -187,7 +219,7 @@
     }
 
     function get_payload(question_id, callback) {
-      $.getJSON("/apis/get_payload", {question_id: question_id}).success(function(data) {
+      getJSON("/apis/get_payload", {question_id: question_id}, function(data) {
         callback(data.result);
       });
     }
@@ -431,16 +463,13 @@
       delete question_to_session[question_id];
       $("#app_area iframe.visible").remove()
 
-      $.post("/apis/submit_judgment",{
+      idemPost("/apis/submit_judgment", {
         "session_id" : session_id,
         "question_id" : question_id,
         "timecost" : now() - push_question_time,
         "judgment" : JSON.stringify(judgment)
-      }).success(function(data) {
-        next_question();
-      }).error(function(data) {
-        alert("error submitting judgment: " + JSON.stringify(data));
       });
+      next_question();
     }
 
     function keep_sessions_alive() {
