@@ -2,7 +2,8 @@
  * This is the code that should be shared by all delphi apps.
  */
 
-var question_id;
+var question_id = window.location.hash.substring(1);
+
 /**
  * This is the function that the delphi app calls to return a judgment
  */
@@ -50,11 +51,9 @@ delphiJQuery(document).ready(function() {
       // register the question handler
       pm.bind("question", function(question) {
         window.question = question;
-        question_id = question.question_id;
         callClient("main", window.question);
       });
 
-      var question_id = window.location.hash.substring(1);
       // tell delphi we're ready to roll
       pm({
         target: window.parent,
