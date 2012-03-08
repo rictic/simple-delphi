@@ -89,7 +89,7 @@
     </div>
 
     <span mjt.script="ondomready">
-      $(".controls").find("button::visible").button().click(function() {
+      $(".controls").find("button").button().click(function() {
         cast_judgment($(this));
       });
       console.log(suggest);
