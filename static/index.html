@@ -199,7 +199,8 @@
             result.app.url = "/apps/dummy/index.html"
           }
         }
-        callback(data.result);
+        result.task = group;
+        callback(result);
       });
     }
 
@@ -345,6 +346,12 @@
     }
 
     function display_question_frame(app_frame) {
+      var question_info = app_frame.id;
+      if (window.location.pathname === "/") {
+        window.history.replaceState("", "", question_info);
+      } else {
+        window.history.pushState("", "", question_info);
+      }
       $(app_frame).removeClass("hidden").addClass("visible");
       hide_activity();
       show_app();
@@ -366,7 +373,7 @@
       //currently we reload the app for every question into a new iframe
       var app_frame = $("#toClone").find(".app").clone()
         .attr("src", app.url + "#" + question_id)
-        .attr("id", "question-" + question_id)
+        .attr("id", serialize_question_data(question_id, task_details.task))
         .appendTo("#app_area");
       var app_window = app_frame[0].contentWindow;
       log("loading app from: " + app.url);
@@ -403,7 +410,7 @@
             data: question
           });
           app_frame.addClass("ready");
-          onReady();
+          onReady(app_frame[0]);
         }
       }
     }
@@ -439,7 +446,6 @@
           }, num);
         });
       });
-
     }
 
     function received_judgment(data) {
@@ -455,8 +461,6 @@
       var d = $(document);
       judgment.extra.page_width = d.width();
       judgment.extra.page_height = d.height();
-
-      // TODO(SM) update URL for permalinking
 
       var question_id = data.question_id;
       var session_id = question_to_session[question_id]
@@ -480,17 +484,55 @@
       }
     }
 
+    function go_to_question(event) {
+      var question_info = parse_question_data(window.location.pathname);
+      if (question_info === null) {
+        return;
+      }
+
+      get_group_details(question_info.task, function(task_details) {
+        preload_frame(question_info.question_id, task_details, function(app_frame) {
+          $("#app_area iframe.visible").removeClass("visible").addClass("hidden");
+          display_question_frame(app_frame);
+        });
+      });
+    }
+
+    function serialize_question_data(question_id, task) {
+      return "/question/" + task + "/" + question_id;
+    }
+
+    function parse_question_data(str) {
+      var m = str.match(/\/question\/([^\/]*)\/([^\/]*)/);
+      if (!m) {
+        return null;
+      }
+
+      return {
+        question_id: m[2],
+        task: m[1]
+      }
+    }
+
     $(function() {
-      setInterval(keep_sessions_alive, 1000 * 15);
+      setInterval(keep_sessions_alive, 15 * 1000);
       pm.bind("judgment", received_judgment);
       pm.bind("ready", function(question_id) {
         question_onreadys[question_id]();
         delete question_onreadys[question_id];
       });
       $(window).resize(resize);
+
+      var path = window.location.pathname;
+      var match = path.match(/\/question\/(.*)/);
+      if (match) {
+        //FIXME(rictic): handle displaying the given question even though we don't
+        //               have a way to handle sessions / question answering here
+        window.history.replaceState(null, "", "/");
+      }
+      window.onpopstate = go_to_question;
       next_question();
     })
-
   </script>
 
 </body>
