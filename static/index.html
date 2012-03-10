@@ -304,6 +304,13 @@
     function next_question() {
       var firstFrame = $("#app_area iframe.hidden.ready")[0];
       if (firstFrame) {
+        var question_info = firstFrame.id;
+        if (window.location.pathname === "/") {
+          window.history.replaceState("", "", question_info);
+        } else {
+          window.history.pushState("", "", question_info);
+        }
+
         display_question_frame(firstFrame);
         ensure_preloaded();
       } else {
@@ -346,12 +353,6 @@
     }
 
     function display_question_frame(app_frame) {
-      var question_info = app_frame.id;
-      if (window.location.pathname === "/") {
-        window.history.replaceState("", "", question_info);
-      } else {
-        window.history.pushState("", "", question_info);
-      }
       $(app_frame).removeClass("hidden").addClass("visible");
       hide_activity();
       show_app();
@@ -362,16 +363,18 @@
 
     var question_onreadys = {};
     function preload_frame(question_id, task_details, onReady) {
-      if ($("#question-" + question_id).length > 0) {
+      var app_frame = document.getElementById(serialize_question_data(question_id, task_details.task));
+      if (app_frame) {
         //already loaded this question
         console.warn("tried to preload " + question_id + " which is already present");
+        onReady(app_frame);
         return;
       }
       var app = task_details.app;
       var params = task_details.configurations;
 
       //currently we reload the app for every question into a new iframe
-      var app_frame = $("#toClone").find(".app").clone()
+      app_frame = $("#toClone").find(".app").clone()
         .attr("src", app.url + "#" + question_id)
         .attr("id", serialize_question_data(question_id, task_details.task))
         .appendTo("#app_area");
@@ -464,7 +467,6 @@
 
       var question_id = data.question_id;
       var session_id = question_to_session[question_id]
-      delete question_to_session[question_id];
       $("#app_area iframe.visible").remove()
 
       idemPost("/apis/submit_judgment", {
