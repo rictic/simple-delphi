@@ -1,0 +1,19 @@
+<html>
+<head>
+  <title>Closure test</title>
+</head>
+<body>
+  <script src="/lib/closure-library/closure/goog/base.js"></script>
+  <script>
+    goog.require("goog.net.XhrManager");
+  </script>
+  <script src="/src/util.js"></script>
+  <script src="/src/task.js"></script>
+  <script src="/src/session.js"></script>
+  <script>
+    Task.getAssignedTasks().addCallback(function(tasks) {
+      console.log(tasks);
+    })
+  </script>
+</body>
+</html>
