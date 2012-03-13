@@ -30,12 +30,9 @@
         "foo" : "bar"
       };
 
-      function acceptConfiguration(configs) {
-        $("#configs").text(JSON.stringify(configs,null,2)).show();
-      }
-
-      function main(question) {
+      function main(question, configs) {
         $("#question").text(JSON.stringify(question,null,2)).show();
+        $("#configs").text(JSON.stringify(configs,null,2)).show();
       }
 
       $(function() {

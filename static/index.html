@@ -373,11 +373,6 @@
 
       question_onreadys[question_id] = function() {
         log("question " + question_id + " is ready, let's roll");
-        pm({
-          target: app_window,
-          type: "acceptConfiguration",
-          data: params
-        });
         onResponse();
       }
 
@@ -400,7 +395,10 @@
           pm({
             target: app_window,
             type: "question",
-            data: question
+            data: {
+              question: question,
+              configs: params
+            }
           });
           app_frame.addClass("ready");
           onReady();

@@ -1,5 +1,6 @@
 /**
  * This is the code that should be shared by all delphi apps.
+ * It is served within a closure and with access to jQuery and JSON.
  */
 
 var question_id = window.location.hash.substring(1);
@@ -49,9 +50,10 @@ delphiJQuery(document).ready(function() {
       });
 
       // register the question handler
-      pm.bind("question", function(question) {
-        window.question = question;
-        callClient("main", window.question);
+      pm.bind("question", function(data) {
+        window.question = data.question;
+        window.configs = data.configs;
+        callClient("main", window.question, window.configs);
       });
 
       // tell delphi we're ready to roll
@@ -62,8 +64,7 @@ delphiJQuery(document).ready(function() {
       })
     } else {
       if (typeof window.question != "undefined" && typeof window.configs != "undefined") {
-        callClient("acceptConfiguration", window.configs);
-        callClient("preloadQuestion", window.question);
+        callClient("preloadQuestion", window.question, window.configs);
         callClient("main", window.question);
       } else {
         alert("There are no 'question' and 'configs' object to test the app with");

@@ -266,16 +266,6 @@
     var mode, max_vandidates, total_candidates, most_relevant_first, training, judgments, buttons, candidates, message, candidate_attrs;
     var selection, lax_label, match_label, topic_viewer_params;
 
-    function acceptConfiguration(configs) {
-      params = configs;
-      mode = configs.mode || "recon";
-      max_candidates = params.max_candidates || 3;
-      total_candidates = params.total_candidates || 3;
-      most_relevant_first = (params.most_relevant_first && params.most_relevant_first == "true");
-      training = (params.training && params.training == "true");
-      judgments = params.judgments;
-    }
-
     function freebaseSearch(query, options) {
       options = options || {};
       options.query = query;
@@ -288,7 +278,15 @@
       return $.getJSON("http://api.freebase.com/api/experimental/topic/standard?callback=?", {id:id});
     }
 
-    function main(q) {
+    function main(q, configs) {
+      params = configs;
+      mode = configs.mode || "recon";
+      max_candidates = params.max_candidates || 3;
+      total_candidates = params.total_candidates || 3;
+      most_relevant_first = (params.most_relevant_first && params.most_relevant_first == "true");
+      training = (params.training && params.training == "true");
+      judgments = params.judgments;
+
       question = q.payload;
 
       if (typeof question.candidates == "string") {
